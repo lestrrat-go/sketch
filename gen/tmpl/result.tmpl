@@ -1,0 +1,175 @@
+{{ define "object.go" }}
+{{- $objectName := .Name -}}
+package {{ .Package }}
+
+{{- if hasTemplate "ext/object/header" }}
+  {{- runTemplate "ext/object/header" $ }}
+{{- end }}
+
+type {{ $objectName }} struct {
+  mu sync.RWMutex
+{{- range $i, $field := .Fields }}
+  {{ $field.GetUnexportedName }} {{ $field.GetIndirectType }}
+{{- end }}
+  extra map[string]interface{}
+}
+
+// These constants are used when the JSON field name is used.
+// Their use is not strictly required, but certain linters
+// complain about repeated constants, and therefore internally
+// this used throughout
+const (
+{{- range $i, $field := .Fields }}
+  {{ $field.GetName }}Key = {{ $field.GetJSON | printf "%q" }}
+{{- end }}
+)
+
+// Get retrieves the value associated with a key
+func (v *{{ $objectName }}) Get(key string, dst interface{}) error {
+  switch key {
+{{- range $i, $field := .Fields }}
+  case {{ $field.GetName }}Key:
+    if val := v.{{ $field.GetUnexportedName }}; val != nil {
+      return blackmagic.AssignIfCompatible(dst, {{ if (ne $field.GetType $field.GetIndirectType) }}*val{{ else if $field.GetImplementsGet }}val.Get(){{ else }}val{{ end }})
+    }
+{{- end }}
+  default:
+    if v.extra != nil {
+      val, ok := v.extra[key]
+      if ok {
+        return blackmagic.AssignIfCompatible(dst, val)
+      }
+    }
+  }
+  return fmt.Errorf(`no such key %q`, key)
+}
+
+{{- range $i, $field := .Fields }}
+  {{- $comment := $field.GetComment -}}
+  {{- if (ne $comment "") }}
+// {{ $comment }}
+  {{- end }}
+func (v *{{ $objectName }}) {{ $field.GetName }}() {{ $field.GetUserFacingType }} {
+  v.mu.RLock()
+  defer v.mu.RUnlock()
+  if val := v.{{ $field.GetUnexportedName }}; val != nil {
+    return {{ if $field.GetImplementsGet }}val.Get(){{ else if (ne $field.GetType $field.GetIndirectType) }}*val{{ else }}val{{ end }}
+  }
+  return {{ $field.GetZeroVal }}
+}
+{{ end }}
+
+// Remove removes the value associated with a key
+func (v *{{ $objectName }}) Remove(key string) error {
+  v.mu.Lock()
+  defer v.mu.Unlock()
+
+  switch key {
+{{- range $i, $field := .Fields }}
+  case {{ $field.GetName }}Key:
+    v.{{ $field.GetUnexportedName }} = nil
+{{- end }}
+  default:
+    delete(v.extra, key)
+  }
+
+  return nil
+}
+
+type pair struct {
+  Name string
+  Value interface{}
+}
+
+func (v *{{ $objectName }}) makePairs() []*pair {
+  pairs := make([]*pair, 0, {{ len .Fields }})
+{{- range $i, $field := .Fields }}
+  if val := v.{{ $field.GetUnexportedName }}; {{ if (or $field.IsMap $field.IsSlice) }}len(val) > 0 {{ else }}val != nil{{ end }} {
+    pairs = append(pairs, &pair{Name: {{ $field.GetName }}Key, Value: {{ if (ne $field.GetType $field.GetIndirectType) }}*val{{ else if $field.GetImplementsGet }}val.Get(){{ else }}val{{ end }}})
+  }
+{{- end }}
+
+  for key, val := range v.extra {
+    pairs = append(pairs, &pair{Name: key, Value: val})
+  }
+
+  sort.Slice(pairs, func(i, j int) bool {
+    return pairs[i].Name < pairs[j].Name
+  })
+  return pairs
+}
+
+func (v *{{ $objectName }}) MarshalJSON() ([]byte, error) {
+  pairs := v.makePairs()
+
+  var buf bytes.Buffer
+  enc := json.NewEncoder(&buf)
+  buf.WriteByte('{')
+  for i, pair := range pairs {
+    if i > 0 {
+      buf.WriteByte(',')
+    }
+    enc.Encode(pair.Name)
+    buf.WriteByte(':')
+    enc.Encode(pair.Value)
+  }
+  buf.WriteByte('}')
+  return buf.Bytes(), nil
+}
+
+func (v *{{ $objectName }}) UnmarshalJSON(data []byte) error {
+  v.mu.Lock()
+  defer v.mu.Unlock()
+
+{{- range $i, $field := .Fields }}
+  v.{{ $field.GetUnexportedName }} = nil
+{{- end }}
+
+  dec := json.NewDecoder(bytes.NewReader(data))
+
+LOOP:
+  for {
+    tok, err := dec.Token()
+    if err != nil {
+      return fmt.Errorf(`error reading JSON token: %w`, err)
+    }
+    switch tok := tok.(type) {
+    case json.Delim:
+      if tok == '}' { // end of object
+        break LOOP
+      }
+      // we should only get into this clause at the very beginning, and just once 
+      if tok != '{' {
+        return fmt.Errorf(`expected '{', but got '%c'`, tok)
+      }
+    case string:
+      switch tok {
+{{- range $i, $field := .Fields }}
+{{- $rawType := $field.GetType }}
+{{- $indirectType := $field.GetIndirectType }}
+      case {{ $field.GetName }}Key:
+        var val {{ $rawType }}
+        if err := dec.Decode(&val); err != nil {
+          return fmt.Errorf(`failed to decode value for %q: %w`, {{ $field.GetName }}Key, err)
+        }
+  {{- if (eq $rawType $indirectType) }}
+        v.{{ $field.GetUnexportedName }} = val
+  {{- else }}
+        v.{{ $field.GetUnexportedName }} = &val
+  {{- end }}
+{{- end }}
+      default:
+        var val interface{}
+	if err := dec.Decode(&val); err != nil {
+	  return fmt.Errorf(`failed to decode value for %q: %w`, tok, err)
+	}
+        v.extra[tok] = val
+      }
+    }
+  }
+  return nil
+}
+{{- if hasTemplate "ext/object/footer" }}
+  {{- runTemplate "ext/object/footer" $ }}
+{{- end }}
+{{- end }}

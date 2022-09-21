@@ -1,0 +1,119 @@
+{{ define "go.mod" }}
+module local.path/sketch/compiler
+
+require (
+  github.com/lestrrat-go/codegen v1.0.4
+  {{ .SrcModule }} v0.0.0
+)
+
+replace (
+  {{ .SrcModule }} => {{ .SrcModulePath }}
+{{- if (and .DevPath (ne .DevPath "")) }}
+  github.com/lestrrat-go/sketch => {{ .DevPath }}
+{{ end }}
+)
+{{ end }}
+
+{{ define "main.go" }}
+package main
+
+import (
+  "bytes"
+  "embed"
+  "fmt"
+  "path/filepath"
+  "os"
+  "sort"
+
+  src "{{ .SrcPkg }}"
+  "github.com/lestrrat-go/sketch"
+  "github.com/lestrrat-go/sketch/schema"
+  "github.com/lestrrat-go/codegen"
+)
+
+//go:embed  tmpl/*
+var content embed.FS
+
+func main() {
+  if err := _main(); err != nil {
+    fmt.Fprintf(os.Stderr, "%s\n", err)
+    os.Exit(1)
+  }
+}
+
+type Schema interface {
+  Name() string
+  Package() string
+  Fields() []*schema.Field
+}
+
+func _main() error {
+  if len(os.Args) < 2 {
+    return fmt.Errorf(`Usage: sketch [output-dir]`)
+  }
+
+  outputDir := os.Args[1]
+  srcs := []struct {
+    Filename string
+    Name string
+    Schema Schema
+  } {
+{{- range $fn, $name := .Schemas }}
+    {
+      Filename: {{ $fn | printf "%q"}},
+      Name: {{ $name | printf "%q" }},
+      Schema: &src.{{ $name }}{},
+    },
+{{- end }}
+  }
+
+  var tt sketch.Template
+
+  tt.AddFS("/system", content)
+{{- range $i, $dir := .UserTemplateDirs }}
+  tt.AddFS("/usr{{ $i }}", os.DirFS({{ $dir| printf "%q" }}))
+{{- end }}
+
+  tmpl, err := tt.Build()
+  if err != nil {
+    return fmt.Errorf(`failed to parse template: %w`, err)
+  }
+
+  defaultPkg := filepath.Base(outputDir)
+  for _, src := range srcs {
+    var buf bytes.Buffer
+
+    fields := src.Schema.Fields()
+    sort.Slice(fields, func(i, j int) bool {
+      return fields[i].GetName() < fields[j].GetName()
+    })
+
+    name := src.Schema.Name()
+    if name == "" {
+      name = src.Name
+    }
+
+    pkg := src.Schema.Package()
+    if pkg == "" {
+      pkg = defaultPkg
+    }
+
+    if err := tmpl.ExecuteTemplate(&buf, "object.go", map[string]interface{}{
+      "Name":  name,
+      "Package": pkg,
+      "Fields": fields,
+    }); err != nil {
+      return fmt.Errorf(`failed to execute template for %s: %w`, src.Filename, err)
+    }
+
+    fn := filepath.Join(outputDir, src.Filename)
+    if err := codegen.WriteFile(fn, &buf, codegen.WithFormatCode(true)); err != nil {
+      if cfe, ok := err.(codegen.CodeFormatError); ok {
+        fmt.Fprint(os.Stderr, cfe.Source())
+      }
+      return fmt.Errorf(`failed to write to %s: %w`, fn, err)
+    }
+  }
+  return nil
+}
+{{ end }}{{- /* end of "main.go" */ -}}
