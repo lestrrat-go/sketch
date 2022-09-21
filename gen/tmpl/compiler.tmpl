@@ -41,10 +41,29 @@ func main() {
   }
 }
 
-type Schema interface {
-  Name() string
-  Package() string
-  Fields() []*schema.Field
+type Vars struct {
+  schema.Interface
+  name string
+  pkg string
+  fields []*schema.Field
+}
+
+func (v *Vars) Name() string {
+  if vv := v.name; vv != "" {
+    return vv
+  }
+  return v.Interface.Name()
+}
+
+func (v *Vars) Package() string {
+  if vv := v.pkg; vv != "" {
+    return vv
+  }
+  return v.Interface.Package()
+}
+
+func (v *Vars) Fields() []*schema.Field {
+  return v.fields
 }
 
 func _main() error {
@@ -56,7 +75,7 @@ func _main() error {
   srcs := []struct {
     Filename string
     Name string
-    Schema Schema
+    Schema schema.Interface
   } {
 {{- range $fn, $name := .Schemas }}
     {
@@ -98,10 +117,11 @@ func _main() error {
       pkg = defaultPkg
     }
 
-    if err := tmpl.ExecuteTemplate(&buf, "object.go", map[string]interface{}{
-      "Name":  name,
-      "Package": pkg,
-      "Fields": fields,
+    if err := tmpl.ExecuteTemplate(&buf, "object.go", &Vars{
+      Interface: src.Schema,
+      name: name,
+      pkg: pkg,
+      fields: fields,
     }); err != nil {
       return fmt.Errorf(`failed to execute template for %s: %w`, src.Filename, err)
     }

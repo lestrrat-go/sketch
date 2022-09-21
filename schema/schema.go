@@ -8,7 +8,19 @@ import (
 	"github.com/lestrrat-go/xstrings"
 )
 
+// Interface exists to provide an abstraction for multiple
+// schema objects that embed schema.Base object in the
+// intermediate program that sketch produces
+type Interface interface {
+	Name() string
+	Package() string
+	Fields() []*Field
+	Comment() string
+}
+
 type Base struct{}
+
+var _ Interface = &Base{} // sanity
 
 func (Base) Name() string {
 	return ""

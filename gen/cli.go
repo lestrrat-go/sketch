@@ -2,6 +2,7 @@ package gen
 
 import (
 	"bytes"
+	"embed"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -17,6 +18,9 @@ import (
 	"github.com/urfave/cli/v2"
 	"golang.org/x/mod/modfile"
 )
+
+//go:embed tmpl/*
+var embedded embed.FS
 
 type App struct {
 }
@@ -249,11 +253,11 @@ func (app *App) looksLikeSchema(schemaPkg string, specType *ast.StructType) bool
 
 func (app *App) genCompiler(ctx *genCtx, schemas []*DeclaredSchema) error {
 	// Copy files
-	toCopy := map[string]string{
-		"gen/tmpl/result.tmpl": "tmpl/result.tmpl",
+	toCopy := []string{
+		"tmpl/result.tmpl",
 	}
-	for from, to := range toCopy {
-		to = filepath.Join(ctx.tmpDir, to)
+	for _, name := range toCopy {
+		to := filepath.Join(ctx.tmpDir, name)
 		dir := filepath.Dir(to)
 		if _, err := os.Stat(dir); err != nil {
 			if err := os.MkdirAll(dir, 0755); err != nil {
@@ -261,9 +265,9 @@ func (app *App) genCompiler(ctx *genCtx, schemas []*DeclaredSchema) error {
 			}
 		}
 
-		src, err := os.Open(from)
+		src, err := embedded.Open(name)
 		if err != nil {
-			return fmt.Errorf(`failed to open file %q for reading: %w`, from, err)
+			return fmt.Errorf(`failed to open file %q for reading: %w`, name, err)
 		}
 
 		dst, err := os.OpenFile(to, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
@@ -277,7 +281,7 @@ func (app *App) genCompiler(ctx *genCtx, schemas []*DeclaredSchema) error {
 		dst.Close()
 	}
 
-	tmpl, err := template.ParseFiles("./gen/tmpl/compiler.tmpl")
+	tmpl, err := template.ParseFS(embedded, "tmpl/compiler.tmpl")
 	if err != nil {
 		return fmt.Errorf(`failed to compile template: %w`, err)
 	}

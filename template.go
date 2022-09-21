@@ -57,11 +57,34 @@ func (tmpl *Template) Build() (*template.Template, error) {
 
 func (tmpl *Template) makeFuncs(tt **template.Template) template.FuncMap {
 	return template.FuncMap{
+		"comment":     tmpl.comment(tt),
 		"hasTemplate": tmpl.hasTemplate(tt),
 		"runTemplate": tmpl.runTemplate(tt),
 	}
 }
 
+func (tmpl *Template) comment(tt **template.Template) func(string, string) string {
+	return func(src string, name string) string {
+		if src == "" {
+			return ""
+		}
+
+		// Comments _ALWAYS_ start with the name of the subject, which should
+		// be provided by our caller
+		src = "{{ .Name }} " + src
+		tmpl, err := template.New("comment").Parse(src)
+		if err != nil {
+			panic(err)
+		}
+
+		var sb strings.Builder
+		sb.WriteString(`// `)
+		if err := tmpl.Execute(&sb, map[string]string{"Name": name}); err != nil {
+			panic(err)
+		}
+		return sb.String()
+	}
+}
 func (tmpl *Template) hasTemplate(tt **template.Template) func(string) bool {
 	return func(name string) bool {
 		return (*tt).Lookup(name) != nil

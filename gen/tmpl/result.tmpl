@@ -6,6 +6,7 @@ package {{ .Package }}
   {{- runTemplate "ext/object/header" $ }}
 {{- end }}
 
+{{ comment .Comment .Name }}
 type {{ $objectName }} struct {
   mu sync.RWMutex
 {{- range $i, $field := .Fields }}
@@ -45,10 +46,7 @@ func (v *{{ $objectName }}) Get(key string, dst interface{}) error {
 }
 
 {{- range $i, $field := .Fields }}
-  {{- $comment := $field.GetComment -}}
-  {{- if (ne $comment "") }}
-// {{ $comment }}
-  {{- end }}
+{{ comment $field.GetComment $field.GetName }}
 func (v *{{ $objectName }}) {{ $field.GetName }}() {{ $field.GetUserFacingType }} {
   v.mu.RLock()
   defer v.mu.RUnlock()
@@ -99,6 +97,10 @@ func (v *{{ $objectName }}) makePairs() []*pair {
   return pairs
 }
 
+// MarshalJSON serializes {{ $objectName }} into JSON.
+// All pre-declared fields are included as long as a value is
+// assigned to them, as well as all extra fields. All of these
+// fields are sorted in alphabetical order.
 func (v *{{ $objectName }}) MarshalJSON() ([]byte, error) {
   pairs := v.makePairs()
 
@@ -117,6 +119,13 @@ func (v *{{ $objectName }}) MarshalJSON() ([]byte, error) {
   return buf.Bytes(), nil
 }
 
+// UnmarshalJSON deserializes a piece of JSON data into {{ $objectName }}.
+//
+// Pre-defined fields must be deserializable via "encoding/json" to their
+// respective Go types, otherwise an error is returned.
+//
+// Extra fields are stored in a special "extra" storage, which can only
+// be accessed via `Get()` and `Set()` methods.
 func (v *{{ $objectName }}) UnmarshalJSON(data []byte) error {
   v.mu.Lock()
   defer v.mu.Unlock()
