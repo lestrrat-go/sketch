@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -26,14 +27,15 @@ type App struct {
 }
 
 type genCtx struct {
-	srcDir        string
-	srcPkg        string
-	srcModule     string
-	srcModulePath string
-	usrDirs       []string
-	dstDir        string
-	tmpDir        string
-	devMode       bool
+	srcDir           string
+	srcPkg           string
+	srcModule        string
+	srcModulePath    string
+	srcModuleVersion string
+	usrDirs          []string
+	dstDir           string
+	tmpDir           string
+	devMode          bool
 }
 
 func (app *App) Run(args []string) error {
@@ -66,6 +68,8 @@ func (app *App) Run(args []string) error {
 type DeclaredSchema struct {
 	Name string
 }
+
+var reMajorVersion = regexp.MustCompile(`v\d+$`)
 
 func (app *App) RunMain(c *cli.Context) error {
 	// Prepare the context
@@ -150,15 +154,22 @@ func (app *App) RunMain(c *cli.Context) error {
 		usrDirs = append(usrDirs, abs)
 	}
 
+	srcModule := parsedMod.Module.Mod.Path
+	srcModuleVersion := "v0.0.0"
+	if majorV := reMajorVersion.FindString(srcModule); majorV != "" {
+		srcModuleVersion = majorV + ".0.0"
+	}
+
 	ctx := genCtx{
-		srcDir:        srcDir,
-		srcPkg:        filepath.Clean(filepath.Join(parsedMod.Module.Mod.Path, schemaDir)),
-		srcModule:     parsedMod.Module.Mod.Path,
-		srcModulePath: rel,
-		dstDir:        dstDir,
-		tmpDir:        tmpDir,
-		usrDirs:       usrDirs,
-		devMode:       c.Bool(`dev-mode`),
+		srcDir:           srcDir,
+		srcPkg:           filepath.Clean(filepath.Join(parsedMod.Module.Mod.Path, schemaDir)),
+		srcModule:        srcModule,
+		srcModulePath:    rel,
+		srcModuleVersion: srcModuleVersion,
+		dstDir:           dstDir,
+		tmpDir:           tmpDir,
+		usrDirs:          usrDirs,
+		devMode:          c.Bool(`dev-mode`),
 	}
 
 	schemas, err := app.extractStructs(&ctx)
@@ -313,6 +324,7 @@ func (app *App) makeVars(ctx *genCtx) (map[string]interface{}, error) {
 		"SrcPkg":           ctx.srcPkg,
 		"SrcModule":        ctx.srcModule,
 		"SrcModulePath":    ctx.srcModulePath,
+		"SrcModuleVersion": ctx.srcModuleVersion,
 		"UserTemplateDirs": ctx.usrDirs,
 	}
 
