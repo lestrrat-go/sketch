@@ -45,6 +45,17 @@ func (v *{{ $objectName }}) Get(key string, dst interface{}) error {
   return fmt.Errorf(`no such key %q`, key)
 }
 
+{{- if .GenerateHasMethods }}
+{{- range $i, $field := .Fields }}
+func (v *{{ $objectName }}) Has{{ $field.GetName }}() bool {
+  v.mu.RLock()
+  defer v.mu.RUnlock()
+  return v.{{ $field.GetUnexportedName }} != nil
+}
+
+{{ end }}
+{{- end }}
+
 {{- range $i, $field := .Fields }}
 {{ comment $field.GetComment $field.GetName }}
 func (v *{{ $objectName }}) {{ $field.GetName }}() {{ $field.GetUserFacingType }} {

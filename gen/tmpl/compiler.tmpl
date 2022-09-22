@@ -41,37 +41,13 @@ func main() {
   }
 }
 
-type Vars struct {
-  schema.Interface
-  name string
-  pkg string
-  fields []*schema.Field
-}
-
-func (v *Vars) Name() string {
-  if vv := v.name; vv != "" {
-    return vv
-  }
-  return v.Interface.Name()
-}
-
-func (v *Vars) Package() string {
-  if vv := v.pkg; vv != "" {
-    return vv
-  }
-  return v.Interface.Package()
-}
-
-func (v *Vars) Fields() []*schema.Field {
-  return v.fields
-}
-
 func _main() error {
   if len(os.Args) < 2 {
     return fmt.Errorf(`Usage: sketch [output-dir]`)
   }
 
   outputDir := os.Args[1]
+  defaultPkg := filepath.Base(outputDir)
   srcs := []struct {
     Filename string
     Name string
@@ -81,7 +57,13 @@ func _main() error {
     {
       Filename: {{ $fn | printf "%q"}},
       Name: {{ $name | printf "%q" }},
-      Schema: &src.{{ $name }}{},
+      Schema: &src.{{ $name }}{
+      	schema.Base{
+  	  DefaultGenerateHasMethods: {{ $.GenerateHasMethods }},
+	  DefaultName: {{ $name | printf "%q" }},
+	  DefaultPkg: defaultPkg,
+	},
+      },
     },
 {{- end }}
   }
@@ -98,7 +80,6 @@ func _main() error {
     return fmt.Errorf(`failed to parse template: %w`, err)
   }
 
-  defaultPkg := filepath.Base(outputDir)
   for _, src := range srcs {
     var buf bytes.Buffer
 
@@ -107,22 +88,7 @@ func _main() error {
       return fields[i].GetName() < fields[j].GetName()
     })
 
-    name := src.Schema.Name()
-    if name == "" {
-      name = src.Name
-    }
-
-    pkg := src.Schema.Package()
-    if pkg == "" {
-      pkg = defaultPkg
-    }
-
-    if err := tmpl.ExecuteTemplate(&buf, "object.go", &Vars{
-      Interface: src.Schema,
-      name: name,
-      pkg: pkg,
-      fields: fields,
-    }); err != nil {
+    if err := tmpl.ExecuteTemplate(&buf, "object.go", src.Schema); err != nil {
       return fmt.Errorf(`failed to execute template for %s: %w`, src.Filename, err)
     }
 

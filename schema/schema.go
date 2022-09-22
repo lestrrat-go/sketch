@@ -18,16 +18,24 @@ type Interface interface {
 	Comment() string
 }
 
-type Base struct{}
+type Base struct {
+	DefaultPkg                string
+	DefaultName               string
+	DefaultGenerateHasMethods bool
+}
 
 var _ Interface = &Base{} // sanity
 
-func (Base) Name() string {
-	return ""
+func (b Base) GenerateHasMethods() bool {
+	return b.DefaultGenerateHasMethods
 }
 
-func (Base) Package() string {
-	return ""
+func (b Base) Name() string {
+	return b.DefaultName
+}
+
+func (b Base) Package() string {
+	return b.DefaultPkg
 }
 
 func (Base) Fields() []*Field {
@@ -94,30 +102,56 @@ func TypeInfoFrom(v interface{}) *TypeInfo {
 		indirectType:   indirectType,
 		implementsGet:  implementsGet,
 		isMap:          kind == reflect.Map,
+		isSlice:        kind == reflect.Slice,
 		userFacingType: typ,
+		zeroVal:        fmt.Sprintf("%#v", reflect.Zero(rv)),
 	}
 }
 
 // Type creates a TypeInfo
 func Type(name string) *TypeInfo {
 	return &TypeInfo{
-		name: name,
+		name:    name,
+		zeroVal: `nil`,
 	}
 }
 
-func (ct *TypeInfo) ZeroVal(s string) *TypeInfo {
-	ct.zeroVal = s
-	return ct
+func (ti *TypeInfo) ZeroVal(s string) *TypeInfo {
+	ti.zeroVal = s
+	return ti
 }
 
-func (ct *TypeInfo) ImplementsGet(b bool) *TypeInfo {
-	ct.implementsGet = b
-	return ct
+func (ti *TypeInfo) ImplementsGet(b bool) *TypeInfo {
+	ti.implementsGet = b
+	return ti
 }
 
-func (ct *TypeInfo) UserFacingType(s string) *TypeInfo {
-	ct.userFacingType = s
-	return ct
+func (ti *TypeInfo) UserFacingType(s string) *TypeInfo {
+	ti.userFacingType = s
+	return ti
+}
+
+func (ti *TypeInfo) IsMap(b bool) *TypeInfo {
+	ti.isMap = b
+	return ti
+}
+
+func (ti *TypeInfo) IsSlice(b bool) *TypeInfo {
+	ti.isSlice = b
+	return ti
+}
+
+// IndirectType specifies the "indirect" type of a field. The fields
+// are stored as _pointers_ to the actual type, so for most types
+// we simply prepend a `*` to the type. For example for a `string`
+// type, the indirect type would be `*string`, whereas for `*Foo`
+// type, we just use `*Foo` as the indirect type. But for cases when
+// you would like to store an interface, for example, you might
+// want to avoid prepending the `*` by explicitly specifying the
+// name of the indirect type.
+func (ti *TypeInfo) IndirectType(s string) *TypeInfo {
+	ti.indirectType = s
+	return ti
 }
 
 type Field struct {
@@ -191,19 +225,6 @@ func (f *Field) JSON(s string) *Field {
 	return f
 }
 
-// IndirectType specifies the "indirect" type of a field. The fields
-// are stored as _pointers_ to the actual type, so for most types
-// we simply prepend a `*` to the type. For example for a `string`
-// type, the indirect type would be `*string`, whereas for `*Foo`
-// type, we just use `*Foo` as the indirect type. But for cases when
-// you would like to store an interface, for example, you might
-// want to avoid prepending the `*` by explicitly specifying the
-// name of the indirect type.
-func (f *Field) IndirectType(s string) *Field {
-	f.indirectType = s
-	return f
-}
-
 func (f *Field) GetUnexportedName() string {
 	if f.unexportedName == "" {
 		f.unexportedName = xstrings.Camel(f.name, xstrings.WithLowerCamel(true))
@@ -228,10 +249,15 @@ func (f *Field) GetJSON() string {
 }
 
 func (f *Field) GetIndirectType() string {
-	if f.indirectType == "" {
-		f.indirectType = `*` + f.GetType()
+	typ := f.typ.indirectType
+	if typ == "" {
+		if f.typ.isSlice || f.typ.isMap {
+			return f.GetType()
+		} else {
+			return `*` + f.GetType()
+		}
 	}
-	return f.indirectType
+	return typ
 }
 
 func (f *Field) IsMap() bool {

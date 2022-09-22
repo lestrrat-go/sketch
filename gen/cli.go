@@ -36,6 +36,8 @@ type genCtx struct {
 	dstDir           string
 	tmpDir           string
 	devMode          bool
+	devPath          string
+	genHasMethods    bool
 }
 
 func (app *App) Run(args []string) error {
@@ -48,6 +50,14 @@ func (app *App) Run(args []string) error {
 			&cli.BoolFlag{
 				Name:  "dev-mode",
 				Usage: "enable developer mode (only for sketch devs)",
+			},
+			&cli.StringFlag{
+				Name:  "dev-path",
+				Usage: "path to the sketch source code (default: current dir)",
+			},
+			&cli.BoolFlag{
+				Name:  "with-has-methods",
+				Usage: "enable generating HasXXXX methods for each attribute",
 			},
 			&cli.StringFlag{
 				Name:    `dst-dir`,
@@ -170,6 +180,8 @@ func (app *App) RunMain(c *cli.Context) error {
 		tmpDir:           tmpDir,
 		usrDirs:          usrDirs,
 		devMode:          c.Bool(`dev-mode`),
+		devPath:          c.String(`dev-path`),
+		genHasMethods:    c.Bool(`with-has-methods`),
 	}
 
 	schemas, err := app.extractStructs(&ctx)
@@ -321,21 +333,26 @@ func init() {
 
 func (app *App) makeVars(ctx *genCtx) (map[string]interface{}, error) {
 	vars := map[string]interface{}{
-		"SrcPkg":           ctx.srcPkg,
-		"SrcModule":        ctx.srcModule,
-		"SrcModulePath":    ctx.srcModulePath,
-		"SrcModuleVersion": ctx.srcModuleVersion,
-		"UserTemplateDirs": ctx.usrDirs,
+		"SrcPkg":             ctx.srcPkg,
+		"SrcModule":          ctx.srcModule,
+		"SrcModulePath":      ctx.srcModulePath,
+		"SrcModuleVersion":   ctx.srcModuleVersion,
+		"UserTemplateDirs":   ctx.usrDirs,
+		"GenerateHasMethods": ctx.genHasMethods,
 	}
 
 	if ctx.devMode {
-		wd, err := os.Getwd()
-		if err != nil {
-			return nil, fmt.Errorf(`failed to compute working directory: %w`, err)
+		devpath := ctx.devPath
+		if devpath == "" {
+			wd, err := os.Getwd()
+			if err != nil {
+				return nil, fmt.Errorf(`failed to compute working directory: %w`, err)
+			}
+			devpath = wd
 		}
-		rel, err := filepath.Rel(ctx.tmpDir, wd)
+		rel, err := filepath.Rel(ctx.tmpDir, devpath)
 		if err != nil {
-			return nil, fmt.Errorf(`failed to compute relative path betwen %q and %q: %w`, ctx.tmpDir, wd, err)
+			return nil, fmt.Errorf(`failed to compute relative path betwen %q and %q: %w`, ctx.tmpDir, devpath, err)
 		}
 		vars["DevPath"] = rel
 	}
