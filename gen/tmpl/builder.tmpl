@@ -1,15 +1,15 @@
 {{ define "object/builder" }}
-
 {{- $builderName := (printf "%sBuilder" .Name) }}
 type {{ $builderName }} struct {
   mu sync.Mutex
-  err Error
+  err error
   once sync.Once
+  object *{{ .Name }}
 }
 
 func (b *{{ $builderName }}) initialize() {
   b.err = nil
-  b.object = {{ .Name }}{}
+  b.object = &{{ .Name }}{}
   b.once = sync.Once{}
 }
 
@@ -35,7 +35,7 @@ func (b *{{ $builderName }}) Build() (*{{ .Name }}, error) {
 {{- end }}
   obj := b.object
   b.once = sync.Once{}
-  b.once.Do(b.reset)
+  b.once.Do(b.initialize)
   return obj, nil
 }
 

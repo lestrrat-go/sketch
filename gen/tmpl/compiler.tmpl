@@ -24,6 +24,7 @@ import (
   "path/filepath"
   "os"
   "sort"
+  "text/template"
 
   src "{{ .SrcPkg }}"
   "github.com/lestrrat-go/sketch"
@@ -81,26 +82,37 @@ func _main() error {
     return fmt.Errorf(`failed to parse template: %w`, err)
   }
 
-  for _, src := range srcs {
-    var buf bytes.Buffer
+  if err := executeGoCodeTemplateToFile(tmpl, "object/common", filepath.Join(outputDir, "sketch_gen.go"), map[string]interface{}{ "Package": defaultPkg }); err != nil {
+    return fmt.Errorf(`failed to render template %s: %w`, "object/common", err)
+  }
 
+  for _, src := range srcs {
     fields := src.Schema.Fields()
     sort.Slice(fields, func(i, j int) bool {
       return fields[i].GetName() < fields[j].GetName()
     })
 
-    if err := tmpl.ExecuteTemplate(&buf, "object.go", src.Schema); err != nil {
-      return fmt.Errorf(`failed to execute template for %s: %w`, src.Filename, err)
-    }
-
-    fn := filepath.Join(outputDir, src.Filename)
-    if err := codegen.WriteFile(fn, &buf, codegen.WithFormatCode(true)); err != nil {
-      if cfe, ok := err.(codegen.CodeFormatError); ok {
-        fmt.Fprint(os.Stderr, cfe.Source())
-      }
-      return fmt.Errorf(`failed to write to %s: %w`, fn, err)
+    if err := executeGoCodeTemplateToFile(tmpl, "object", filepath.Join(outputDir, src.Filename), src.Schema); err != nil {
+      return fmt.Errorf(`failed to render template %s: %w`, "object", err)
     }
   }
   return nil
 }
+
+func executeGoCodeTemplateToFile(tmpl *template.Template, name, fn string, vars interface{}) error {
+  var buf bytes.Buffer
+
+  if err := tmpl.ExecuteTemplate(&buf, name, vars); err != nil {
+    return fmt.Errorf(`failed to execute template for %s: %w`, name, err)
+  }
+
+  if err := codegen.WriteFile(fn, &buf, codegen.WithFormatCode(true)); err != nil {
+    if cfe, ok := err.(codegen.CodeFormatError); ok {
+      fmt.Fprint(os.Stderr, cfe.Source())
+    }
+    return fmt.Errorf(`failed to write to %s: %w`, fn, err)
+  }
+  return nil
+}
+
 {{ end }}{{- /* end of "main.go" */ -}}

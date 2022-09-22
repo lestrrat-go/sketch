@@ -53,14 +53,15 @@ func (Base) Comment() string {
 
 // TypeInfo is used to store information about a type.
 type TypeInfo struct {
-	kind           reflect.Kind
-	implementsGet  bool
-	indirectType   string
-	isMap          bool
-	isSlice        bool
-	name           string
-	userFacingType string
-	zeroVal        string
+	kind             reflect.Kind
+	implementsGet    bool
+	implementsAccept bool
+	indirectType     string
+	isMap            bool
+	isSlice          bool
+	name             string
+	userFacingType   string
+	zeroVal          string
 }
 
 func typeName(rv reflect.Type) string {
@@ -81,6 +82,9 @@ func typeName(rv reflect.Type) string {
 	return name
 }
 
+var typInterface = reflect.TypeOf((*interface{})(nil)).Elem()
+var typError = reflect.TypeOf((*error)(nil)).Elem()
+
 func TypeInfoFrom(v interface{}) *TypeInfo {
 	rv := reflect.TypeOf(v)
 
@@ -97,19 +101,28 @@ func TypeInfoFrom(v interface{}) *TypeInfo {
 	kind := rv.Kind()
 
 	var implementsGet bool
-	m, ok := rv.MethodByName(`Get`)
-	if ok {
+	if m, ok := rv.MethodByName(`Get`); ok {
 		implementsGet = m.Type.NumIn() == 0 && m.Type.NumOut() == 1
 	}
 
+	var implementsAccept bool
+	if m, ok := rv.MethodByName(`Accept`); ok {
+		implementsAccept =
+			m.Type.NumIn() == 1 &&
+				m.Type.In(0) == typInterface &&
+				m.Type.NumOut() == 1 &&
+				m.Type.Out(0) == typError
+	}
+
 	return &TypeInfo{
-		name:           typ,
-		indirectType:   indirectType,
-		implementsGet:  implementsGet,
-		isMap:          kind == reflect.Map,
-		isSlice:        kind == reflect.Slice,
-		userFacingType: typ,
-		zeroVal:        fmt.Sprintf("%#v", reflect.Zero(rv)),
+		name:             typ,
+		indirectType:     indirectType,
+		implementsGet:    implementsGet,
+		implementsAccept: implementsAccept,
+		isMap:            kind == reflect.Map,
+		isSlice:          kind == reflect.Slice,
+		userFacingType:   typ,
+		zeroVal:          fmt.Sprintf("%#v", reflect.Zero(rv)),
 	}
 }
 
@@ -127,6 +140,11 @@ func (ti *TypeInfo) ZeroVal(s string) *TypeInfo {
 }
 
 func (ti *TypeInfo) ImplementsGet(b bool) *TypeInfo {
+	ti.implementsGet = b
+	return ti
+}
+
+func (ti *TypeInfo) ImplementsAccept(b bool) *TypeInfo {
 	ti.implementsGet = b
 	return ti
 }
@@ -295,10 +313,18 @@ func (f *Field) GetImplementsGet() bool {
 	return f.typ.implementsGet
 }
 
+func (f *Field) GetImplementsAccept() bool {
+	return f.typ.implementsAccept
+}
+
 func (f *Field) GetZeroVal() string {
 	return f.typ.zeroVal
 }
 
 func (f *Field) GetUserFacingType() string {
-	return f.typ.userFacingType
+	typ := f.typ.userFacingType
+	if typ == "" {
+		typ = f.GetType()
+	}
+	return typ
 }

@@ -1,4 +1,13 @@
-{{ define "object.go" }}
+{{ define "object/common" }}
+package {{ .Package }}
+
+type fieldPair struct {
+  Name string
+  Value interface{}
+}
+{{ end }}
+
+{{ define "object" }}
 {{- $objectName := .Name -}}
 package {{ .Package }}
 
@@ -45,6 +54,40 @@ func (v *{{ $objectName }}) Get(key string, dst interface{}) error {
   return fmt.Errorf(`no such key %q`, key)
 }
 
+// Set sets the value of the specified field. The name must be a JSON
+// field name, not the Go name
+func (v *{{ $objectName }}) Set(key string, value interface{}) error {
+  v.mu.Lock()
+  defer v.mu.Unlock()
+  switch key {
+{{- range $i, $field := .Fields }}
+{{- $rawType := $field.GetType }}
+{{- $indirectType := $field.GetIndirectType }}
+  case {{ $field.GetName }}Key:
+  {{- if $field.GetImplementsAccept }}
+    var object {{ $rawType }}
+    if err := object.Accept(value); err != nil {
+      return fmt.Errorf(`failed to accept value: %w`, err)
+    }
+    v.{{ $field.GetUnexportedName }} = &object
+  {{- else }}
+    converted, ok := value.({{ $rawType }})
+    if !ok {
+      return fmt.Errorf(`expected value of type {{ $rawType }} for field {{ $field.GetJSON }}, got %T`, value)
+    }
+    {{- if (eq $rawType $indirectType) }}
+    v.{{ $field.GetUnexportedName }} = converted
+    {{- else }}
+    v.{{ $field.GetUnexportedName }} = &converted
+    {{- end }}
+  {{- end }}
+{{- end }}
+  default:
+    v.extra[key] = value
+  }
+  return nil
+}
+
 {{- if .GenerateHasMethods }}
 {{- range $i, $field := .Fields }}
 func (v *{{ $objectName }}) Has{{ $field.GetName }}() bool {
@@ -85,21 +128,16 @@ func (v *{{ $objectName }}) Remove(key string) error {
   return nil
 }
 
-type pair struct {
-  Name string
-  Value interface{}
-}
-
-func (v *{{ $objectName }}) makePairs() []*pair {
-  pairs := make([]*pair, 0, {{ len .Fields }})
+func (v *{{ $objectName }}) makePairs() []*fieldPair {
+  pairs := make([]*fieldPair, 0, {{ len .Fields }})
 {{- range $i, $field := .Fields }}
   if val := v.{{ $field.GetUnexportedName }}; {{ if (or $field.IsMap $field.IsSlice) }}len(val) > 0 {{ else }}val != nil{{ end }} {
-    pairs = append(pairs, &pair{Name: {{ $field.GetName }}Key, Value: {{ if (ne $field.GetType $field.GetIndirectType) }}*val{{ else if $field.GetImplementsGet }}val.Get(){{ else }}val{{ end }}})
+    pairs = append(pairs, &fieldPair{Name: {{ $field.GetName }}Key, Value: {{ if (ne $field.GetType $field.GetIndirectType) }}*val{{ else if $field.GetImplementsGet }}val.Get(){{ else }}val{{ end }}})
   }
 {{- end }}
 
   for key, val := range v.extra {
-    pairs = append(pairs, &pair{Name: key, Value: val})
+    pairs = append(pairs, &fieldPair{Name: key, Value: val})
   }
 
   sort.Slice(pairs, func(i, j int) bool {
