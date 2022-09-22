@@ -59,6 +59,7 @@ func _main() error {
       Name: {{ $name | printf "%q" }},
       Schema: &src.{{ $name }}{
       	schema.Base{
+  	  DefaultGenerateBuilders: {{ $.GenerateBuilders }},
   	  DefaultGenerateHasMethods: {{ $.GenerateHasMethods }},
 	  DefaultName: {{ $name | printf "%q" }},
 	  DefaultPkg: defaultPkg,

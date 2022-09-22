@@ -1,0 +1,52 @@
+{{ define "object/builder" }}
+
+{{- $builderName := (printf "%sBuilder" .Name) }}
+type {{ $builderName }} struct {
+  mu sync.Mutex
+  err Error
+  once sync.Once
+}
+
+func (b *{{ $builderName }}) initialize() {
+  b.err = nil
+  b.object = {{ .Name }}{}
+  b.once = sync.Once{}
+}
+
+{{- range $i, $field := .Fields }}
+func (b *{{ $builderName }}) {{ $field.GetName }}(in {{ $field.GetType }}) *{{ $builderName }} {
+  b.once.Do(b.initialize)
+  _ = b.object.Set({{ $field.GetName }}Key, in)
+  return b
+}
+{{- end }}
+
+func (b *{{ $builderName }}) Build() (*{{ .Name }}, error) {
+  err := b.err
+  if err != nil {
+    return nil, err
+  }
+{{- range $i, $field := .Fields }}
+  {{- if $field.GetRequired }}
+  if b.object.{{ $field.GetUnexportedName }} == nil {
+    return nil, fmt.Errorf("required field '{{ $field.Name }}' not initialized")
+  }
+  {{- end }}
+{{- end }}
+  obj := b.object
+  b.once = sync.Once{}
+  b.once.Do(b.reset)
+  return obj, nil
+}
+
+func (b *{{ $builderName }}) MustBuild() *{{ .Name }} {
+  b.mu.Lock()
+  defer b.mu.Unlock()
+  object, err := b.Build()
+  if err != nil {
+    panic(err)
+  }
+  return object
+}
+
+{{ end }}

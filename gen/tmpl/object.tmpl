@@ -189,6 +189,10 @@ LOOP:
   }
   return nil
 }
+
+{{- if .GenerateBuilders }}
+{{ runTemplate "object/builder" $ }}
+{{- end }}
 {{- if hasTemplate "ext/object/footer" }}
   {{- runTemplate "ext/object/footer" $ }}
 {{- end }}

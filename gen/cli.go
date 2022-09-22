@@ -38,6 +38,7 @@ type genCtx struct {
 	devMode          bool
 	devPath          string
 	genHasMethods    bool
+	genBuilders      bool
 }
 
 func (app *App) Run(args []string) error {
@@ -54,6 +55,10 @@ func (app *App) Run(args []string) error {
 			&cli.StringFlag{
 				Name:  "dev-path",
 				Usage: "path to the sketch source code (default: current dir)",
+			},
+			&cli.BoolFlag{
+				Name:  "with-builders",
+				Usage: "enable generating Builders for each object",
 			},
 			&cli.BoolFlag{
 				Name:  "with-has-methods",
@@ -182,6 +187,7 @@ func (app *App) RunMain(c *cli.Context) error {
 		devMode:          c.Bool(`dev-mode`),
 		devPath:          c.String(`dev-path`),
 		genHasMethods:    c.Bool(`with-has-methods`),
+		genBuilders:      c.Bool(`with-builders`),
 	}
 
 	schemas, err := app.extractStructs(&ctx)
@@ -277,7 +283,8 @@ func (app *App) looksLikeSchema(schemaPkg string, specType *ast.StructType) bool
 func (app *App) genCompiler(ctx *genCtx, schemas []*DeclaredSchema) error {
 	// Copy files
 	toCopy := []string{
-		"tmpl/result.tmpl",
+		"tmpl/builder.tmpl",
+		"tmpl/object.tmpl",
 	}
 	for _, name := range toCopy {
 		to := filepath.Join(ctx.tmpDir, name)
@@ -338,6 +345,7 @@ func (app *App) makeVars(ctx *genCtx) (map[string]interface{}, error) {
 		"SrcModulePath":      ctx.srcModulePath,
 		"SrcModuleVersion":   ctx.srcModuleVersion,
 		"UserTemplateDirs":   ctx.usrDirs,
+		"GenerateBuilders":   ctx.genBuilders,
 		"GenerateHasMethods": ctx.genHasMethods,
 	}
 

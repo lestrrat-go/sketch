@@ -22,12 +22,17 @@ type Base struct {
 	DefaultPkg                string
 	DefaultName               string
 	DefaultGenerateHasMethods bool
+	DefaultGenerateBuilders   bool
 }
 
 var _ Interface = &Base{} // sanity
 
 func (b Base) GenerateHasMethods() bool {
 	return b.DefaultGenerateHasMethods
+}
+
+func (b Base) GenerateBuilders() bool {
+	return b.DefaultGenerateBuilders
 }
 
 func (b Base) Name() string {
@@ -155,6 +160,7 @@ func (ti *TypeInfo) IndirectType(s string) *TypeInfo {
 }
 
 type Field struct {
+	required       bool
 	name           string
 	typ            *TypeInfo
 	typName        string
@@ -186,6 +192,15 @@ func NewField(name string, typ interface{}) *Field {
 		f.typ = TypeInfoFrom(typ)
 	}
 	return f
+}
+
+func (f *Field) Required(b bool) *Field {
+	f.required = b
+	return f
+}
+
+func (f *Field) GetRequired() bool {
+	return f.required
 }
 
 func String(name string) *Field {
