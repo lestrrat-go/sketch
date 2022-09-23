@@ -7,14 +7,20 @@ type {{ $builderName }} struct {
   object *{{ .Name }}
 }
 
+// New{{ $builderName }} creates a new {{ $builderName }} instance.
+// {{ $builderName }} is safe to be used uninitialized as well.
+func New{{ $builderName }}() *{{ $builderName }} {
+  return &{{ $builderName }}{}
+}
+
 func (b *{{ $builderName }}) initialize() {
   b.err = nil
   b.object = &{{ .Name }}{}
-  b.once = sync.Once{}
 }
 
 {{- range $i, $field := .Fields }}
-func (b *{{ $builderName }}) {{ $field.GetName }}(in {{ $field.GetType }}) *{{ $builderName }} {
+{{- if $field.GetExtension }}{{ continue }}{{ end }}
+func (b *{{ $builderName }}) {{ $field.GetName }}(in {{ if $field.IsSlice }}...{{ $field.GetElement }}{{ else }}{{ $field.GetType }}{{ end }}) *{{ $builderName }} {
   b.once.Do(b.initialize)
   _ = b.object.Set({{ $field.GetName }}Key, in)
   return b
@@ -27,6 +33,7 @@ func (b *{{ $builderName }}) Build() (*{{ .Name }}, error) {
     return nil, err
   }
 {{- range $i, $field := .Fields }}
+  {{- if $field.GetExtension }}{{ continue }}{{ end }}
   {{- if $field.GetRequired }}
   if b.object.{{ $field.GetUnexportedName }} == nil {
     return nil, fmt.Errorf("required field '{{ $field.Name }}' not initialized")
@@ -40,8 +47,6 @@ func (b *{{ $builderName }}) Build() (*{{ .Name }}, error) {
 }
 
 func (b *{{ $builderName }}) MustBuild() *{{ .Name }} {
-  b.mu.Lock()
-  defer b.mu.Unlock()
   object, err := b.Build()
   if err != nil {
     panic(err)

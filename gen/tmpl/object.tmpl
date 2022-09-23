@@ -30,6 +30,7 @@ type {{ $objectName }} struct {
 // this used throughout
 const (
 {{- range $i, $field := .Fields }}
+  {{- if $field.GetExtension }}{{ continue }}{{ end }}
   {{ $field.GetName }}Key = {{ $field.GetJSON | printf "%q" }}
 {{- end }}
 )
@@ -38,6 +39,7 @@ const (
 func (v *{{ $objectName }}) Get(key string, dst interface{}) error {
   switch key {
 {{- range $i, $field := .Fields }}
+  {{- if $field.GetExtension }}{{ continue }}{{ end }}
   case {{ $field.GetName }}Key:
     if val := v.{{ $field.GetUnexportedName }}; val != nil {
       return blackmagic.AssignIfCompatible(dst, {{ if (ne $field.GetType $field.GetIndirectType) }}*val{{ else if $field.GetImplementsGet }}val.Get(){{ else }}val{{ end }})
@@ -63,6 +65,7 @@ func (v *{{ $objectName }}) Set(key string, value interface{}) error {
 {{- range $i, $field := .Fields }}
 {{- $rawType := $field.GetType }}
 {{- $indirectType := $field.GetIndirectType }}
+  {{- if $field.GetExtension }}{{ continue }}{{ end }}
   case {{ $field.GetName }}Key:
   {{- if $field.GetImplementsAccept }}
     var object {{ $rawType }}
@@ -90,6 +93,7 @@ func (v *{{ $objectName }}) Set(key string, value interface{}) error {
 
 {{- if .GenerateHasMethods }}
 {{- range $i, $field := .Fields }}
+{{- if $field.GetExtension }}{{ continue }}{{ end }}
 func (v *{{ $objectName }}) Has{{ $field.GetName }}() bool {
   v.mu.RLock()
   defer v.mu.RUnlock()
@@ -100,6 +104,7 @@ func (v *{{ $objectName }}) Has{{ $field.GetName }}() bool {
 {{- end }}
 
 {{- range $i, $field := .Fields }}
+{{- if $field.GetExtension }}{{ continue }}{{ end }}
 {{ comment $field.GetComment $field.GetName }}
 func (v *{{ $objectName }}) {{ $field.GetName }}() {{ $field.GetUserFacingType }} {
   v.mu.RLock()
@@ -118,6 +123,7 @@ func (v *{{ $objectName }}) Remove(key string) error {
 
   switch key {
 {{- range $i, $field := .Fields }}
+  {{- if $field.GetExtension }}{{ continue }}{{ end }}
   case {{ $field.GetName }}Key:
     v.{{ $field.GetUnexportedName }} = nil
 {{- end }}
@@ -131,6 +137,7 @@ func (v *{{ $objectName }}) Remove(key string) error {
 func (v *{{ $objectName }}) makePairs() []*fieldPair {
   pairs := make([]*fieldPair, 0, {{ len .Fields }})
 {{- range $i, $field := .Fields }}
+  {{- if $field.GetExtension }}{{ continue }}{{ end }}
   if val := v.{{ $field.GetUnexportedName }}; {{ if (or $field.IsMap $field.IsSlice) }}len(val) > 0 {{ else }}val != nil{{ end }} {
     pairs = append(pairs, &fieldPair{Name: {{ $field.GetName }}Key, Value: {{ if (ne $field.GetType $field.GetIndirectType) }}*val{{ else if $field.GetImplementsGet }}val.Get(){{ else }}val{{ end }}})
   }
@@ -180,6 +187,7 @@ func (v *{{ $objectName }}) UnmarshalJSON(data []byte) error {
   defer v.mu.Unlock()
 
 {{- range $i, $field := .Fields }}
+{{- if $field.GetExtension }}{{ continue }}{{ end }}
   v.{{ $field.GetUnexportedName }} = nil
 {{- end }}
 
@@ -203,6 +211,7 @@ LOOP:
     case string:
       switch tok {
 {{- range $i, $field := .Fields }}
+{{- if $field.GetExtension }}{{ continue }}{{ end }}
 {{- $rawType := $field.GetType }}
 {{- $indirectType := $field.GetIndirectType }}
       case {{ $field.GetName }}Key:

@@ -59,6 +59,7 @@ type TypeInfo struct {
 	indirectType     string
 	isMap            bool
 	isSlice          bool
+	element          string
 	name             string
 	userFacingType   string
 	zeroVal          string
@@ -98,8 +99,6 @@ func TypeInfoFrom(v interface{}) *TypeInfo {
 		indirectType = `*` + typ
 	}
 
-	kind := rv.Kind()
-
 	var implementsGet bool
 	if m, ok := rv.MethodByName(`Get`); ok {
 		implementsGet = m.Type.NumIn() == 0 && m.Type.NumOut() == 1
@@ -114,13 +113,25 @@ func TypeInfoFrom(v interface{}) *TypeInfo {
 				m.Type.Out(0) == typError
 	}
 
+	var isMap bool
+	var isSlice bool
+	var element string
+	switch kind := rv.Kind(); kind {
+	case reflect.Map:
+		isMap = true
+	case reflect.Slice:
+		isSlice = true
+		element = typeName(rv.Elem())
+	}
+
 	return &TypeInfo{
 		name:             typ,
 		indirectType:     indirectType,
 		implementsGet:    implementsGet,
 		implementsAccept: implementsAccept,
-		isMap:            kind == reflect.Map,
-		isSlice:          kind == reflect.Slice,
+		isMap:            isMap,
+		isSlice:          isSlice,
+		element:          element,
 		userFacingType:   typ,
 		zeroVal:          fmt.Sprintf("%#v", reflect.Zero(rv)),
 	}
@@ -177,6 +188,11 @@ func (ti *TypeInfo) IndirectType(s string) *TypeInfo {
 	return ti
 }
 
+func (ti *TypeInfo) Element(s string) *TypeInfo {
+	ti.element = s
+	return ti
+}
+
 type Field struct {
 	required       bool
 	name           string
@@ -186,8 +202,8 @@ type Field struct {
 	json           string
 	indirectType   string
 	userFacingType string
-	implementsGet  *bool
 	comment        string
+	extension      bool
 }
 
 var typInfoType = reflect.TypeOf((*TypeInfo)(nil))
@@ -327,4 +343,24 @@ func (f *Field) GetUserFacingType() string {
 		typ = f.GetType()
 	}
 	return typ
+}
+
+// Extension declares the string as an extension, and not part of the object
+// as defined by the JSON representation. That is to say, this field
+// exist in the Go struct, but not in the JSON structures that it
+// serizlizes to or deserializes from.
+//
+// Fields defined as extensions are expected to be _internal_ to the object.
+// They are not exposed by either Get/Set, and do not get any sort of accessors.
+func (f *Field) Extension(b bool) *Field {
+	f.extension = b
+	return f
+}
+
+func (f *Field) GetExtension() bool {
+	return f.extension
+}
+
+func (f *Field) GetElement() string {
+	return f.typ.element
 }
