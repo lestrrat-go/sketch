@@ -3,6 +3,7 @@ package schema
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"unicode"
 
 	"github.com/lestrrat-go/xstrings"
@@ -137,10 +138,22 @@ func TypeInfoFrom(v interface{}) *TypeInfo {
 	}
 }
 
-// Type creates a TypeInfo
+// Type creates a TypeInfo. Because this constructor only takes the
+// name of the type and otherwise has no other information, it assumes
+// many things, and you will have to set many parameers manually.
+//
+// The defualt zero value is assumed to be `nil`
+//
+// If the name starts with a `[]`, then `IsSlice()` is automatically set to true
+// If the name starts with a `map[`, then `IsMap()` is automatically set to true
 func Type(name string) *TypeInfo {
+	isSlice := strings.HasPrefix(name, `[]`)
+	isMap := strings.HasPrefix(name, `map[`)
+
 	return &TypeInfo{
 		name:    name,
+		isSlice: isSlice,
+		isMap:   isMap,
 		zeroVal: `nil`,
 	}
 }
