@@ -14,7 +14,7 @@ replace (
 )
 {{ end }}
 
-{{ define "main.go" }}
+{{ define "compiler.go" }}
 package main
 
 import (
@@ -62,6 +62,7 @@ func _main() error {
       	schema.Base{
   	  DefaultGenerateBuilders: {{ $.GenerateBuilders }},
   	  DefaultGenerateHasMethods: {{ $.GenerateHasMethods }},
+	  DefaultKeyNamePrefix: {{ if $.WithKeyNamePrefix }}{{ $name | printf "%q" }}{{ else }}""{{ end }},
 	  DefaultName: {{ $name | printf "%q" }},
 	  DefaultPkg: defaultPkg,
 	},

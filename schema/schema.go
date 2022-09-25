@@ -17,11 +17,13 @@ type Interface interface {
 	Package() string
 	Fields() []*Field
 	Comment() string
+	KeyNamePrefix() string
 }
 
 type Base struct {
 	DefaultPkg                string
 	DefaultName               string
+	DefaultKeyNamePrefix      string
 	DefaultGenerateHasMethods bool
 	DefaultGenerateBuilders   bool
 }
@@ -50,6 +52,10 @@ func (Base) Fields() []*Field {
 
 func (Base) Comment() string {
 	return ""
+}
+
+func (b Base) KeyNamePrefix() string {
+	return b.DefaultKeyNamePrefix
 }
 
 // TypeInfo is used to store information about a type.
@@ -385,4 +391,16 @@ func (f *Field) GetExtension() bool {
 
 func (f *Field) GetElement() string {
 	return f.typ.element
+}
+
+func (f *Field) GetKeyName(object interface{ KeyNamePrefix() string }) string {
+	var b strings.Builder
+
+	// If the object wants per-object prefix, do it. Otherwise leave it empty
+	if prefix := object.KeyNamePrefix(); prefix != "" {
+		b.WriteString(prefix)
+	}
+	b.WriteString(f.GetName())
+	b.WriteString(`Key`)
+	return b.String()
 }

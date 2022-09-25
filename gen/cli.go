@@ -39,6 +39,7 @@ type genCtx struct {
 	devPath          string
 	genHasMethods    bool
 	genBuilders      bool
+	withKeyPrefix    bool
 }
 
 func (app *App) Run(args []string) error {
@@ -59,6 +60,10 @@ func (app *App) Run(args []string) error {
 			&cli.BoolFlag{
 				Name:  "with-builders",
 				Usage: "enable generating Builders for each object",
+			},
+			&cli.BoolFlag{
+				Name:  "with-key-prefix",
+				Usage: "prepend object names in key name constant variables",
 			},
 			&cli.BoolFlag{
 				Name:  "with-has-methods",
@@ -188,6 +193,7 @@ func (app *App) RunMain(c *cli.Context) error {
 		devPath:          c.String(`dev-path`),
 		genHasMethods:    c.Bool(`with-has-methods`),
 		genBuilders:      c.Bool(`with-builders`),
+		withKeyPrefix:    c.Bool(`with-key-prefix`),
 	}
 
 	schemas, err := app.extractStructs(&ctx)
@@ -347,6 +353,7 @@ func (app *App) makeVars(ctx *genCtx) (map[string]interface{}, error) {
 		"UserTemplateDirs":   ctx.usrDirs,
 		"GenerateBuilders":   ctx.genBuilders,
 		"GenerateHasMethods": ctx.genHasMethods,
+		"WithKeyNamePrefix":  ctx.withKeyPrefix,
 	}
 
 	if ctx.devMode {
@@ -403,7 +410,7 @@ func (app *App) generateCompilerMain(ctx *genCtx, tmpl *template.Template, schem
 		return fmt.Errorf(`failed to build variable map: %w`, err)
 	}
 	vars["Schemas"] = schemaMap
-	if err := tmpl.ExecuteTemplate(f, "main.go", vars); err != nil {
+	if err := tmpl.ExecuteTemplate(f, "compiler.go", vars); err != nil {
 		return fmt.Errorf(`failed to execute template "go.mod": %w`, err)
 	}
 	return nil

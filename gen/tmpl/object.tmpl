@@ -31,7 +31,7 @@ type {{ $objectName }} struct {
 const (
 {{- range $i, $field := .Fields }}
   {{- if $field.GetExtension }}{{ continue }}{{ end }}
-  {{ $field.GetName }}Key = {{ $field.GetJSON | printf "%q" }}
+  {{ $field.GetKeyName $ }} = {{ $field.GetJSON | printf "%q" }}
 {{- end }}
 )
 
@@ -40,7 +40,7 @@ func (v *{{ $objectName }}) Get(key string, dst interface{}) error {
   switch key {
 {{- range $i, $field := .Fields }}
   {{- if $field.GetExtension }}{{ continue }}{{ end }}
-  case {{ $field.GetName }}Key:
+  case {{ $field.GetKeyName $ }}:
     if val := v.{{ $field.GetUnexportedName }}; val != nil {
       return blackmagic.AssignIfCompatible(dst, {{ if (ne $field.GetType $field.GetIndirectType) }}*val{{ else if $field.GetImplementsGet }}val.Get(){{ else }}val{{ end }})
     }
@@ -66,7 +66,7 @@ func (v *{{ $objectName }}) Set(key string, value interface{}) error {
 {{- $rawType := $field.GetType }}
 {{- $indirectType := $field.GetIndirectType }}
   {{- if $field.GetExtension }}{{ continue }}{{ end }}
-  case {{ $field.GetName }}Key:
+  case {{ $field.GetKeyName $ }}:
   {{- if $field.GetImplementsAccept }}
     var object {{ $rawType }}
     if err := object.Accept(value); err != nil {
@@ -124,7 +124,7 @@ func (v *{{ $objectName }}) Remove(key string) error {
   switch key {
 {{- range $i, $field := .Fields }}
   {{- if $field.GetExtension }}{{ continue }}{{ end }}
-  case {{ $field.GetName }}Key:
+  case {{ $field.GetKeyName $ }}:
     v.{{ $field.GetUnexportedName }} = nil
 {{- end }}
   default:
@@ -139,7 +139,7 @@ func (v *{{ $objectName }}) makePairs() []*fieldPair {
 {{- range $i, $field := .Fields }}
   {{- if $field.GetExtension }}{{ continue }}{{ end }}
   if val := v.{{ $field.GetUnexportedName }}; {{ if (or $field.IsMap $field.IsSlice) }}len(val) > 0 {{ else }}val != nil{{ end }} {
-    pairs = append(pairs, &fieldPair{Name: {{ $field.GetName }}Key, Value: {{ if (ne $field.GetType $field.GetIndirectType) }}*val{{ else if $field.GetImplementsGet }}val.Get(){{ else }}val{{ end }}})
+    pairs = append(pairs, &fieldPair{Name: {{ $field.GetKeyName $ }}, Value: {{ if (ne $field.GetType $field.GetIndirectType) }}*val{{ else if $field.GetImplementsGet }}val.Get(){{ else }}val{{ end }}})
   }
 {{- end }}
 
@@ -214,10 +214,10 @@ LOOP:
 {{- if $field.GetExtension }}{{ continue }}{{ end }}
 {{- $rawType := $field.GetType }}
 {{- $indirectType := $field.GetIndirectType }}
-      case {{ $field.GetName }}Key:
+      case {{ $field.GetKeyName $ }}:
         var val {{ $rawType }}
         if err := dec.Decode(&val); err != nil {
-          return fmt.Errorf(`failed to decode value for %q: %w`, {{ $field.GetName }}Key, err)
+          return fmt.Errorf(`failed to decode value for %q: %w`, {{ $field.GetKeyName $ }}, err)
         }
   {{- if (eq $rawType $indirectType) }}
         v.{{ $field.GetUnexportedName }} = val
