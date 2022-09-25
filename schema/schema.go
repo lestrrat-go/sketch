@@ -258,6 +258,10 @@ func Int(name string) *Field {
 	return NewField(name, int(0))
 }
 
+func Bool(name string) *Field {
+	return NewField(name, true)
+}
+
 func (f *Field) GetName() string {
 	return f.name
 }
