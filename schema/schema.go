@@ -149,9 +149,14 @@ func TypeInfoFrom(v interface{}) *TypeInfo {
 func Type(name string) *TypeInfo {
 	isSlice := strings.HasPrefix(name, `[]`)
 	isMap := strings.HasPrefix(name, `map[`)
+	var element string
+	if isSlice {
+		element = strings.TrimPrefix(name, `[]`)
+	}
 
 	return &TypeInfo{
 		name:    name,
+		element: element,
 		isSlice: isSlice,
 		isMap:   isMap,
 		zeroVal: `nil`,
