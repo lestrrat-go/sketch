@@ -47,7 +47,7 @@ func (v *{{ $objectName }}) Get(key string, dst interface{}) error {
   {{- if $field.GetExtension }}{{ continue }}{{ end }}
   case {{ $field.GetKeyName $ }}:
     if val := v.{{ $field.GetUnexportedName }}; val != nil {
-      return blackmagic.AssignIfCompatible(dst, {{ if (ne $rawType $indirectType) }}*val{{ else if $type.GetImplementsGet }}val.Get(){{ else }}val{{ end }})
+      return blackmagic.AssignIfCompatible(dst, {{ if $type.GetImplementsGet }}val.Get(){{ else if (ne $rawType $indirectType) }}*val{{ else }}val{{ end }})
     }
 {{- end }}
   default:
@@ -78,7 +78,11 @@ func (v *{{ $objectName }}) Set(key string, value interface{}) error {
     if err := object.Accept(value); err != nil {
       return fmt.Errorf(`failed to accept value: %w`, err)
     }
+    {{- if (eq $rawType $indirectType) }}
+    v.{{ $field.GetUnexportedName }} = object
+    {{- else }}
     v.{{ $field.GetUnexportedName }} = &object
+    {{- end }}
   {{- else }}
     converted, ok := value.({{ $rawType }})
     if !ok {
@@ -150,9 +154,11 @@ func (v *{{ $objectName }}) makePairs() []*fieldPair {
   pairs := make([]*fieldPair, 0, {{ len .Fields }})
 {{- range $i, $field := .Fields }}
 {{- $type := $field.GetType }}
+{{- $rawType := $type.GetName }}
+{{- $indirectType := $type.GetIndirectType }}
   {{- if $field.GetExtension }}{{ continue }}{{ end }}
   if val := v.{{ $field.GetUnexportedName }}; {{ if (or $type.GetIsMap $type.GetIsSlice) }}len(val) > 0 {{ else }}val != nil{{ end }} {
-    pairs = append(pairs, &fieldPair{Name: {{ $field.GetKeyName $ }}, Value: {{ if (ne $type.GetName $type.GetIndirectType) }}*val{{ else if $type.GetImplementsGet }}val.Get(){{ else }}val{{ end }}})
+    pairs = append(pairs, &fieldPair{Name: {{ $field.GetKeyName $ }}, Value: {{ if $type.GetImplementsGet }}val.Get(){{ else if (ne $rawType $indirectType) }}*val{{ else }}val{{ end }}})
   }
 {{- end }}
 

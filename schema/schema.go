@@ -135,6 +135,7 @@ func TypeInfoFrom(v interface{}) *TypeInfo {
 
 	var isMap bool
 	var isSlice bool
+	var initArgStyle InitializerArgumentStyle
 	element := "sketch.UnknownType" // so it's easier to see
 	switch kind := rv.Kind(); kind {
 	case reflect.Map:
@@ -142,13 +143,15 @@ func TypeInfoFrom(v interface{}) *TypeInfo {
 	case reflect.Slice:
 		isSlice = true
 		element = typeName(rv.Elem())
+		initArgStyle = InitializerArgumentAsSlice
 	}
 
 	return &TypeInfo{
 		name:             typ,
-		indirectType:     indirectType,
 		implementsGet:    implementsGet,
 		implementsAccept: implementsAccept,
+		initArgStyle:     initArgStyle,
+		indirectType:     indirectType,
 		isMap:            isMap,
 		isSlice:          isSlice,
 		element:          element,
@@ -207,7 +210,7 @@ func (ti *TypeInfo) ImplementsGet(b bool) *TypeInfo {
 }
 
 func (ti *TypeInfo) ImplementsAccept(b bool) *TypeInfo {
-	ti.implementsGet = b
+	ti.implementsAccept = b
 	return ti
 }
 
@@ -402,7 +405,7 @@ func (ti *TypeInfo) GetIndirectType() string {
 	}
 }
 
-// Extension declares the string as an extension, and not part of the object
+// Extension declares the field as an extension, and not part of the object
 // as defined by the JSON representation. That is to say, this field
 // exist in the Go struct, but not in the JSON structures that it
 // serizlizes to or deserializes from.
