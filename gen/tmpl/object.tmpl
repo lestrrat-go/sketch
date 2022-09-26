@@ -37,6 +37,8 @@ const (
 
 // Get retrieves the value associated with a key
 func (v *{{ $objectName }}) Get(key string, dst interface{}) error {
+  v.mu.RLock()
+  defer v.mu.RUnlock()
   switch key {
 {{- range $i, $field := .Fields }}
 {{- $type := $field.GetType }}
@@ -179,9 +181,13 @@ func (v *{{ $objectName }}) MarshalJSON() ([]byte, error) {
     if i > 0 {
       buf.WriteByte(',')
     }
-    enc.Encode(pair.Name)
+    if err := enc.Encode(pair.Name); err != nil {
+      return nil, fmt.Errorf(`failed to encode map key name: %w`, err)
+    }
     buf.WriteByte(':')
-    enc.Encode(pair.Value)
+    if err := enc.Encode(pair.Value); err != nil {
+      return nil, fmt.Errorf(`failed to encode map value for %q: %w`, pair.Name, err)
+    }
   }
   buf.WriteByte('}')
   return buf.Bytes(), nil
