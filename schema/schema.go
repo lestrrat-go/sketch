@@ -9,6 +9,13 @@ import (
 	"github.com/lestrrat-go/xstrings"
 )
 
+type InitializerArgumentStyle int
+
+const (
+	InitializerArgumentAsSingleArg = iota
+	InitializerArgumentAsSlice
+)
+
 // Interface exists to provide an abstraction for multiple
 // schema objects that embed schema.Base object in the
 // intermediate program that sketch produces
@@ -64,6 +71,7 @@ type TypeInfo struct {
 	implementsGet    bool
 	implementsAccept bool
 	indirectType     string
+	initArgStyle     InitializerArgumentStyle
 	isMap            bool
 	isSlice          bool
 	element          string
@@ -122,7 +130,7 @@ func TypeInfoFrom(v interface{}) *TypeInfo {
 
 	var isMap bool
 	var isSlice bool
-	var element string
+	element := "sketch.UnknownType" // so it's easier to see
 	switch kind := rv.Kind(); kind {
 	case reflect.Map:
 		isMap = true
@@ -155,18 +163,32 @@ func TypeInfoFrom(v interface{}) *TypeInfo {
 func Type(name string) *TypeInfo {
 	isSlice := strings.HasPrefix(name, `[]`)
 	isMap := strings.HasPrefix(name, `map[`)
-	var element string
+	element := "sketch.UnknownType" // so it's easier to see
+	var initArgStyle InitializerArgumentStyle
 	if isSlice {
+		initArgStyle = InitializerArgumentAsSlice
 		element = strings.TrimPrefix(name, `[]`)
 	}
 
-	return &TypeInfo{
-		name:    name,
-		element: element,
-		isSlice: isSlice,
-		isMap:   isMap,
-		zeroVal: `nil`,
+	var indirectType string
+	if strings.HasPrefix(name, `*`) || (isSlice || isMap) {
+		indirectType = name
 	}
+
+	return &TypeInfo{
+		name:         name,
+		element:      element,
+		indirectType: indirectType,
+		initArgStyle: initArgStyle,
+		isSlice:      isSlice,
+		isMap:        isMap,
+		zeroVal:      `nil`,
+	}
+}
+
+func (ti *TypeInfo) InitializerArgumentStyle(ias InitializerArgumentStyle) *TypeInfo {
+	ti.initArgStyle = ias
+	return ti
 }
 
 func (ti *TypeInfo) ZeroVal(s string) *TypeInfo {
@@ -187,6 +209,45 @@ func (ti *TypeInfo) ImplementsAccept(b bool) *TypeInfo {
 func (ti *TypeInfo) UserFacingType(s string) *TypeInfo {
 	ti.userFacingType = s
 	return ti
+}
+
+func (ti *TypeInfo) GetName() string {
+	return ti.name
+}
+
+// GetImplementsGet returns true if the object contains a method named `Get`
+// which returns a single return value. The return value is expected
+// to be the UserFacingType
+func (ti *TypeInfo) GetImplementsGet() bool {
+	return ti.implementsGet
+}
+
+func (ti *TypeInfo) GetImplementsAccept() bool {
+	return ti.implementsAccept
+}
+
+func (ti *TypeInfo) GetZeroVal() string {
+	return ti.zeroVal
+}
+
+func (ti *TypeInfo) GetUserFacingType() string {
+	typ := ti.userFacingType
+	if typ == "" {
+		typ = ti.name
+	}
+	return typ
+}
+
+func (ti *TypeInfo) GetElement() string {
+	return ti.element
+}
+
+func (ti *TypeInfo) GetIsMap() bool {
+	return ti.isMap
+}
+
+func (ti *TypeInfo) GetIsSlice() bool {
+	return ti.isSlice
 }
 
 func (ti *TypeInfo) IsMap(b bool) *TypeInfo {
@@ -215,6 +276,10 @@ func (ti *TypeInfo) IndirectType(s string) *TypeInfo {
 func (ti *TypeInfo) Element(s string) *TypeInfo {
 	ti.element = s
 	return ti
+}
+
+func (ti *TypeInfo) SliceStyleInitializerArgument() bool {
+	return ti.initArgStyle == InitializerArgumentAsSlice
 }
 
 type Field struct {
@@ -277,13 +342,8 @@ func (f *Field) GetName() string {
 	return f.name
 }
 
-func (f *Field) Type(s string) *Field {
-	f.typ.name = s
-	return f
-}
-
-func (f *Field) GetType() string {
-	return f.typ.name
+func (f *Field) GetType() *TypeInfo {
+	return f.typ
 }
 
 // Unexported specifies the unexported name for this field.
@@ -325,52 +385,16 @@ func (f *Field) GetJSON() string {
 	return f.json
 }
 
-func (f *Field) GetIndirectType() string {
-	typ := f.typ.indirectType
-	if typ == "" {
-		if f.typ.isSlice || f.typ.isMap {
-			return f.GetType()
-		} else {
-			return `*` + f.GetType()
-		}
+func (ti *TypeInfo) GetIndirectType() string {
+	typ := ti.indirectType
+	if typ != "" {
+		return typ
 	}
-	return typ
-}
-
-func (f *Field) IsMap() bool {
-	return f.typ.isMap
-}
-
-func (f *Field) IsSlice() bool {
-	return f.typ.isSlice
-}
-
-func (f *Field) ImplementsGet(b bool) *Field {
-	f.typ.ImplementsGet(b)
-	return f
-}
-
-// GetImplementsGet returns true if the object contains a method named `Get`
-// which returns a single return value. The return value is expected
-// to be the UserFacingType
-func (f *Field) GetImplementsGet() bool {
-	return f.typ.implementsGet
-}
-
-func (f *Field) GetImplementsAccept() bool {
-	return f.typ.implementsAccept
-}
-
-func (f *Field) GetZeroVal() string {
-	return f.typ.zeroVal
-}
-
-func (f *Field) GetUserFacingType() string {
-	typ := f.typ.userFacingType
-	if typ == "" {
-		typ = f.GetType()
+	if ti.isSlice || ti.isMap {
+		return ti.name
+	} else {
+		return `*` + ti.name
 	}
-	return typ
 }
 
 // Extension declares the string as an extension, and not part of the object
@@ -387,10 +411,6 @@ func (f *Field) Extension(b bool) *Field {
 
 func (f *Field) GetExtension() bool {
 	return f.extension
-}
-
-func (f *Field) GetElement() string {
-	return f.typ.element
 }
 
 func (f *Field) GetKeyName(object interface{ KeyNamePrefix() string }) string {

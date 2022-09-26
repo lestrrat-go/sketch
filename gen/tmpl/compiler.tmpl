@@ -59,7 +59,7 @@ func _main() error {
       Filename: {{ $fn | printf "%q"}},
       Name: {{ $name | printf "%q" }},
       Schema: &src.{{ $name }}{
-      	schema.Base{
+      	Base: schema.Base{
   	  DefaultGenerateBuilders: {{ $.GenerateBuilders }},
   	  DefaultGenerateHasMethods: {{ $.GenerateHasMethods }},
 	  DefaultKeyNamePrefix: {{ if $.WithKeyNamePrefix }}{{ $name | printf "%q" }}{{ else }}""{{ end }},
