@@ -7,6 +7,10 @@ type {{ $builderName }} struct {
   object *{{ .Name }}
 }
 
+{{- if hasTemplate "ext/builder/header" }}
+  {{- runTemplate "ext/builder/header" $ }}
+{{- end }}
+
 // New{{ $builderName }} creates a new {{ $builderName }} instance.
 // {{ $builderName }} is safe to be used uninitialized as well.
 func New{{ $builderName }}() *{{ $builderName }} {
@@ -22,7 +26,7 @@ func (b *{{ $builderName }}) initialize() {
 {{- if $field.GetExtension }}{{ continue }}{{ end }}
 func (b *{{ $builderName }}) {{ $field.GetName }}(in {{ if $field.IsSlice }}...{{ $field.GetElement }}{{ else }}{{ $field.GetType }}{{ end }}) *{{ $builderName }} {
   b.once.Do(b.initialize)
-  _ = b.object.Set({{ $field.GetName }}Key, in)
+  _ = b.object.Set({{ $field.GetKeyName $ }}, in)
   return b
 }
 {{- end }}
@@ -54,4 +58,7 @@ func (b *{{ $builderName }}) MustBuild() *{{ .Name }} {
   return object
 }
 
+{{- if hasTemplate "ext/builder/footer" }}
+  {{- runTemplate "ext/builder/footer" $ }}
+{{- end }}
 {{ end }}
