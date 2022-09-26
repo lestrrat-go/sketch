@@ -90,6 +90,9 @@ func (v *{{ $objectName }}) Set(key string, value interface{}) error {
   {{- end }}
 {{- end }}
   default:
+    if v.extra == nil {
+      v.extra = make(map[string]interface{})
+    }
     v.extra[key] = value
   }
   return nil
@@ -161,7 +164,7 @@ func (v *{{ $objectName }}) makePairs() []*fieldPair {
   return pairs
 }
 
-{{ if .GenerateMethod "MarshalJSON" -}}
+{{ if .GenerateMethod "object.MarshalJSON" -}}
 // MarshalJSON serializes {{ $objectName }} into JSON.
 // All pre-declared fields are included as long as a value is
 // assigned to them, as well as all extra fields. All of these
@@ -185,7 +188,7 @@ func (v *{{ $objectName }}) MarshalJSON() ([]byte, error) {
 }
 {{ end -}}
 
-{{ if .GenerateMethod "UnmarshalJSON" -}}
+{{ if .GenerateMethod "object.UnmarshalJSON" -}}
 // UnmarshalJSON deserializes a piece of JSON data into {{ $objectName }}.
 //
 // Pre-defined fields must be deserializable via "encoding/json" to their
@@ -241,6 +244,9 @@ LOOP:
         var val interface{}
 	if err := dec.Decode(&val); err != nil {
 	  return fmt.Errorf(`failed to decode value for %q: %w`, tok, err)
+	}
+	if v.extra == nil {
+	  v.extra = make(map[string]interface{})
 	}
         v.extra[tok] = val
       }
