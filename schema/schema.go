@@ -65,6 +65,11 @@ func (b Base) KeyNamePrefix() string {
 	return b.DefaultKeyNamePrefix
 }
 
+// GenerateMethod should return true if the given method should be generated
+func (b Base) GenerateMethod(name string) bool {
+	return true
+}
+
 // TypeInfo is used to store information about a type.
 type TypeInfo struct {
 	kind             reflect.Kind

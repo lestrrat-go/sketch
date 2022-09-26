@@ -147,7 +147,7 @@ func (v *{{ $objectName }}) makePairs() []*fieldPair {
 {{- $type := $field.GetType }}
   {{- if $field.GetExtension }}{{ continue }}{{ end }}
   if val := v.{{ $field.GetUnexportedName }}; {{ if (or $type.GetIsMap $type.GetIsSlice) }}len(val) > 0 {{ else }}val != nil{{ end }} {
-    pairs = append(pairs, &fieldPair{Name: {{ $field.GetKeyName $ }}, Value: {{ if (ne $field.GetName $type.GetIndirectType) }}*val{{ else if $type.GetImplementsGet }}val.Get(){{ else }}val{{ end }}})
+    pairs = append(pairs, &fieldPair{Name: {{ $field.GetKeyName $ }}, Value: {{ if (ne $type.GetName $type.GetIndirectType) }}*val{{ else if $type.GetImplementsGet }}val.Get(){{ else }}val{{ end }}})
   }
 {{- end }}
 
@@ -161,6 +161,7 @@ func (v *{{ $objectName }}) makePairs() []*fieldPair {
   return pairs
 }
 
+{{ if .GenerateMethod "MarshalJSON" -}}
 // MarshalJSON serializes {{ $objectName }} into JSON.
 // All pre-declared fields are included as long as a value is
 // assigned to them, as well as all extra fields. All of these
@@ -182,7 +183,9 @@ func (v *{{ $objectName }}) MarshalJSON() ([]byte, error) {
   buf.WriteByte('}')
   return buf.Bytes(), nil
 }
+{{ end -}}
 
+{{ if .GenerateMethod "UnmarshalJSON" -}}
 // UnmarshalJSON deserializes a piece of JSON data into {{ $objectName }}.
 //
 // Pre-defined fields must be deserializable via "encoding/json" to their
@@ -245,6 +248,7 @@ LOOP:
   }
   return nil
 }
+{{ end -}}
 
 {{- if .GenerateBuilders }}
 {{ runTemplate "object/builder" $ }}
