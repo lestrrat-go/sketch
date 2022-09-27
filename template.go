@@ -7,6 +7,7 @@ import (
 	"text/template"
 
 	"github.com/lestrrat-go/multifs"
+	"github.com/lestrrat-go/sketch/schema"
 )
 
 type Template struct {
@@ -60,6 +61,7 @@ func (tmpl *Template) makeFuncs(tt **template.Template) template.FuncMap {
 		"comment":     tmpl.comment(tt),
 		"hasTemplate": tmpl.hasTemplate(tt),
 		"runTemplate": tmpl.runTemplate(tt),
+		"fieldByName": tmpl.fieldByName(tt),
 	}
 }
 
@@ -85,6 +87,7 @@ func (tmpl *Template) comment(tt **template.Template) func(string, string) strin
 		return sb.String()
 	}
 }
+
 func (tmpl *Template) hasTemplate(tt **template.Template) func(string) bool {
 	return func(name string) bool {
 		return (*tt).Lookup(name) != nil
@@ -98,5 +101,16 @@ func (tmpl *Template) runTemplate(tt **template.Template) func(string, interface
 			return "", err
 		}
 		return sb.String(), nil
+	}
+}
+
+func (tmpl *Template) fieldByName(**template.Template) func(schema.Interface, string) *schema.Field {
+	return func(s schema.Interface, name string) *schema.Field {
+		for _, f := range s.Fields() {
+			if f.GetName() == name {
+				return f
+			}
+		}
+		return nil
 	}
 }

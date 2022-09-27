@@ -25,11 +25,17 @@ func (b *{{ $builderName }}) initialize() {
 {{- range $i, $field := .Fields }}
 {{- $type := $field.GetType }}
 {{- if $field.GetExtension }}{{ continue }}{{ end }}
-func (b *{{ $builderName }}) {{ $field.GetName }}(in {{ if $type.SliceStyleInitializerArgument }}...{{ $type.GetElement }}{{ else }}{{ $type.GetName }}{{ end }}) *{{ $builderName }} {
+func (b *{{ $builderName }}) {{ $field.GetName }}(in {{ if $type.SliceStyleInitializerArgument }}...{{ $type.GetElement }}{{ else }}{{ $type.GetUserFacingType }}{{ end }}) *{{ $builderName }} {
   b.once.Do(b.initialize)
   b.mu.Lock()
   defer b.mu.Unlock()
-  _ = b.object.Set({{ $field.GetKeyName $ }}, in)
+  if b.err != nil {
+    return b
+  }
+
+  if err := b.object.Set({{ $field.GetKeyName $ }}, in); err != nil {
+    b.err = err
+  }
   return b
 }
 {{- end }}
@@ -37,15 +43,13 @@ func (b *{{ $builderName }}) {{ $field.GetName }}(in {{ if $type.SliceStyleIniti
 func (b *{{ $builderName }}) Build() (*{{ .Name }}, error) {
   b.mu.Lock()
   defer b.mu.Unlock()
-  err := b.err
-  if err != nil {
+  if err := b.err; err != nil {
     return nil, err
   }
 {{- range $i, $field := .Fields }}
-  {{- if $field.GetExtension }}{{ continue }}{{ end }}
   {{- if $field.GetRequired }}
   if b.object.{{ $field.GetUnexportedName }} == nil {
-    return nil, fmt.Errorf("required field '{{ $field.Name }}' not initialized")
+    return nil, fmt.Errorf("required field '{{ $field.GetName }}' not initialized")
   }
   {{- end }}
 {{- end }}
