@@ -45,6 +45,15 @@ func (b Base) GenerateBuilders() bool {
 	return b.DefaultGenerateBuilders
 }
 
+// GenerateMethod should return true if the given method is allowed to be
+// generated. The argument consists of a prefix (e.g. "object." or "builder.")
+// followed by the actual method name.
+//
+// By default all methods are allowed.
+func (Base) GenerateMethod(string) bool {
+	return true
+}
+
 func (b Base) Name() string {
 	return b.DefaultName
 }
@@ -63,11 +72,6 @@ func (Base) Comment() string {
 
 func (b Base) KeyNamePrefix() string {
 	return b.DefaultKeyNamePrefix
-}
-
-// GenerateMethod should return true if the given method should be generated
-func (b Base) GenerateMethod(name string) bool {
-	return true
 }
 
 // TypeInfo is used to store information about a type.
