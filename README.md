@@ -54,7 +54,7 @@ We will assume that you want to implement a module named `myproject.com/mymodule
 hosted in your `~/go` directory:
 
 ```
-~/go/myproject.com/mymodule`
+~/go/myproject.com/mymodule
 ```
 
 We also assume that the above directory is where you want to generate the
@@ -115,17 +115,6 @@ func (Thing) Name() string {
 }
 ```
 
-You may opt to specify the package name that the object belongs to.
-By default last component from the output directory (in this example's case
-`mymodule`) will be used, but you can override this by declaring a method
-`Package()` on the schema object:
-
-```go
-func (Thing) Package() string {
-  return "awesomeModule"
-}
-```
-
 Finally, you ou will want to declare the list of fields in this object.
 This is done by declaring a method named `Fields()` on the schema object,
 which returns a list of `schema.Field` objects.
@@ -153,22 +142,76 @@ This will in turn instruct `sketch` to generate code that
 
 # Templates
 
+## Syntax 
+
+Templates in `sketch` are all written using `text/template`.
+
+## Variables
+
+The only available template variable is the current schema object that is being
+used to generate code. This will be set to `$` globally, and is available as the
+default context variable for each template block
+
+```
+{{ define "ext/object/header" }}
+{{ .Name }}{{# will print schema object name }}
+{{ $.Name }}{{# same as above }}
+{{ end }}
+```
+
+## Extra Templates / Overriding Templates
+
 Users can specify their own templates to be processed along side with the
 system templates that come with this tool.
 
-Provide your templates that define templates named  as below, and
-they will be included automatically.
+Assuming you have your templates located under `/path/to/templates`, you can
+specify `sketch` to use templates in this directory by using the `--tmpl-dir`
+command line option:
 
 ```
-package ...
-...
-{{ ext/object/header }}
-...
-// object definition
-type Object struct { ... }
-
-// methods ...
-...
-{{ ext/object/footer }}
-...
+sketch --tmpl-dir=/path/to/templates
 ```
+
+### Core Templates
+
+Core Templates are templates that come with `sketch` tool itself. Normally you do
+not need to do anything with these, but if you want to fundamentally change the
+way `sketch` generates code, you can override them from your extra templates.
+
+To do this, simply define template blocks with the same name as the
+template blocks provided by the core templates.
+
+For example, to override the main template that generates object headers, you can
+declare a template block named `"object/header"` in your template:
+
+```
+{{ define "object/header" }}
+// Your custom header code goes here
+{{ end }}
+```
+
+Note that this does not _ADD_ to the core template, but completely replaces it.
+
+The following is the list of template block names that you may override.
+
+| Name | Description |
+|------|-------------|
+| object | The main template for generating object code. |
+| object/header | Template for the header part of the object, including the top comment, package name, imports |
+| object/footer | Template for the footer part of the object |
+| object/struct | Template for the struct definition of the object |
+
+### Optional Templates
+
+Optional templates are only rendered if the user provides them
+(you can think of them as hooks).
+
+If you would like to augment the generated template, choose an appropriate
+optional template, and declare a template block by that name.
+
+The following is the list of template block names that you may provide.
+
+| Name | Description |
+|------|-------------|
+| ext/object/header | Called from within object/header template |
+| ext/object/footer | Called from within object/footer template |
