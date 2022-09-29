@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/lestrrat-go/blackmagic v1.0.2-0.20220926061631-9e875f47412a
-	github.com/lestrrat-go/multifs v0.0.0-20220920084758-a01744380c91
+	github.com/lestrrat-go/multifs v0.0.0-20220929095432-73523184bb48
 	github.com/lestrrat-go/xstrings v0.0.0-20210804220435-4dd8b234342b
 	github.com/urfave/cli/v2 v2.16.3
 	golang.org/x/mod v0.3.0
