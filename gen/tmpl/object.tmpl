@@ -70,7 +70,7 @@ func (v *{{ $objectName }}) Get(key string, dst interface{}) error {
   return fmt.Errorf(`no such key %q`, key)
 }
 
-{{ if .GenerateMethod "object.Set" }}
+{{- if .GenerateMethod "object.Set" }}
 // Set sets the value of the specified field. The name must be a JSON
 // field name, not the Go name
 func (v *{{ $objectName }}) Set(key string, value interface{}) error {
