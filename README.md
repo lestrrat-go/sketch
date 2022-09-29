@@ -133,12 +133,66 @@ of `string` type is to be declared, with an exported name of `Foo`. It
 also specifies that the value of this field will be stored in a field
 named `foo-field` when serialized to JSON.
 
-This will in turn instruct `sketch` to generate code that
+Then run the `sketch` command line utility. It is assumed that your
+schema above resides under `/path/to/schema`, and that you want to
+generate code to `/path/to/dst`
 
-1. Creates `mymodule.Thing` struct
-1. Creates an accessor for `Foo`, but will store `Foo` as an unexported field.
-1. Creates UnmarshalJSON/MarshalJSON methods that recognizes field `Foo` -- that it is stored as `foo-field`, and that its value must be a `string`
-1. The JSON methods will also recognize other fields and stores them appropriately, but you will onlybe able to get to them via `(*Thing).Get()`
+```
+sketch -d /path/to/dst /path/to/schema
+```
+
+If successful, you should see several files created in the `/path/to/dst`
+directory.
+
+# Generated Code
+
+## Optional Components
+
+### Builder
+
+By default only the object to hold the data is created. Accessors are
+provided by default, but you can only populate the data by deserializing
+from JSON.
+
+This is a problem if you would like to programmatically build your object.
+`sketch` can provide "builders" for each of the object so that you can
+create them programmatically, by adding the `--with-builders` command line
+option when generating code:
+
+```
+sketch --with-builders ...
+```
+
+Then you will be able to compose the object using builders in the
+following fashion:
+
+```go
+b := NewBuilder().
+   FieldA(...).
+   FieldB(...).
+   FieldC(...).
+   MustBuild()
+```
+
+### "HasXXXX" Methods
+
+If you would like to differentiate between a field initialized with
+its zero value and a field which has not been initialized at all,
+you will want to generate the "Has" methods.
+
+To do this, execute the `sketch` command with the `--with-has-methods`
+command line argument.
+
+```
+sketch --with-has-methods ....
+```
+
+This will generate `Has<FIELD>` methods for each field, allowing you
+to query if a field has been initialized:
+
+```go
+if obj.HasFieldA() { ... }
+```
 
 # Templates
 
@@ -148,8 +202,10 @@ Templates in `sketch` are all written using `text/template`.
 
 ## Variables
 
-The only available template variable is the current schema object that is being
-used to generate code. This will be set to `$` globally, and is available as the
+The only available template variable is the current schema object (the one
+you declared using `schema.Base`) that is being used to generate code.
+
+This will be set to `$` globally, and is available as the
 default context variable for each template block
 
 ```
