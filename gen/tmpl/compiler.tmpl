@@ -60,11 +60,13 @@ func _main() error {
       Name: {{ $name | printf "%q" }},
       Schema: &src.{{ $name }}{
       	Base: schema.Base{
-  	  DefaultGenerateBuilders: {{ $.GenerateBuilders }},
-  	  DefaultGenerateHasMethods: {{ $.GenerateHasMethods }},
-	  DefaultKeyNamePrefix: {{ if $.WithKeyNamePrefix }}{{ $name | printf "%q" }}{{ else }}""{{ end }},
-	  DefaultName: {{ $name | printf "%q" }},
-	  DefaultPkg: defaultPkg,
+	  Variables: map[string]interface{}{
+	    "DefaultGenerateBuilders": {{ $.GenerateBuilders }},
+	    "DefaultGenerateHasMethods": {{ $.GenerateHasMethods }},
+	    "DefaultKeyNamePrefix": {{ if $.WithKeyNamePrefix }}{{ $name | printf "%q" }}{{ else }}""{{ end }},
+	    "DefaultName": {{ $name | printf "%q" }},
+	    "DefaultPkg": defaultPkg,
+          },
 	},
       },
     },

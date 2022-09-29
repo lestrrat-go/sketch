@@ -1,6 +1,7 @@
 package gen
 
 import (
+	"bufio"
 	"bytes"
 	"embed"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -27,19 +29,11 @@ type App struct {
 }
 
 type genCtx struct {
-	srcDir           string
-	srcPkg           string
-	srcModule        string
-	srcModulePath    string
-	srcModuleVersion string
-	usrDirs          []string
-	dstDir           string
-	tmpDir           string
-	devMode          bool
-	devPath          string
-	genHasMethods    bool
-	genBuilders      bool
-	withKeyPrefix    bool
+	srcDir    string
+	usrDirs   []string
+	dstDir    string
+	tmpDir    string
+	variables map[string]interface{}
 }
 
 func (app *App) Run(args []string) error {
@@ -53,6 +47,10 @@ func (app *App) Run(args []string) error {
 				Name:  "dev-mode",
 				Usage: "enable developer mode (only for sketch devs)",
 			},
+			&cli.StringSliceFlag{
+				Name:  "var",
+				Usage: "A key=value pair of variables, followed by an optional type (e.g. key=value:bool)",
+			},
 			&cli.StringFlag{
 				Name:  "dev-path",
 				Usage: "path to the sketch source code (default: current dir)",
@@ -62,7 +60,7 @@ func (app *App) Run(args []string) error {
 				Usage: "enable generating Builders for each object",
 			},
 			&cli.BoolFlag{
-				Name:  "with-key-prefix",
+				Name:  "with-key-name-prefix",
 				Usage: "prepend object names in key name constant variables",
 			},
 			&cli.BoolFlag{
@@ -90,12 +88,45 @@ type DeclaredSchema struct {
 }
 
 var reMajorVersion = regexp.MustCompile(`v\d+$`)
+var reMatchVar = regexp.MustCompile(`([^=]+)=(.+)(?::(bool|string|int))?`)
 
 func (app *App) RunMain(c *cli.Context) error {
 	// Prepare the context
 	if c.NArg() != 1 {
 		cli.ShowAppHelp(c)
 		return fmt.Errorf(`schema directory must be supplied`)
+	}
+
+	variables := make(map[string]interface{})
+	if vars := c.StringSlice(`var`); len(vars) > 0 {
+		for _, sv := range vars {
+			matches := reMatchVar.FindAllStringSubmatch(sv, -1)
+			if len(matches) == 0 {
+				return fmt.Errorf(`invalid variable declaration %q`, sv)
+			}
+
+			name := matches[0][1]
+			typ := matches[0][3]
+
+			switch typ {
+			case "", "string":
+				variables[name] = matches[0][2]
+			case "int":
+				i, err := strconv.ParseInt(matches[0][2], 10, 64)
+				if err != nil {
+					return fmt.Errorf(`failed to parse %q as bool: %w`, name, err)
+				}
+				variables[name] = i
+			case "bool":
+				b, err := strconv.ParseBool(matches[0][2])
+				if err != nil {
+					return fmt.Errorf(`failed to parse %q as bool: %w`, name, err)
+				}
+				variables[name] = b
+			default:
+				return fmt.Errorf(`unhandled variable type %q for %q`, typ, name)
+			}
+		}
 	}
 
 	srcDir := c.Args().Get(0)
@@ -180,20 +211,36 @@ func (app *App) RunMain(c *cli.Context) error {
 		srcModuleVersion = majorV + ".0.0"
 	}
 
+	variables[`GenerateBuilders`] = c.Bool(`with-builders`)
+	variables[`GenerateHasMethods`] = c.Bool(`with-has-methods`)
+	variables[`SrcModule`] = srcModule
+	variables[`SrcModulePath`] = rel
+	variables[`SrcModuleVersion`] = srcModuleVersion
+	variables[`SrcPkg`] = filepath.Clean(filepath.Join(parsedMod.Module.Mod.Path, schemaDir))
+	variables[`UserTemplateDirs`] = usrDirs
+	variables[`WithKeyNamePrefix`] = c.Bool(`with-key-name-prefix`)
+	if c.Bool(`dev-mode`) {
+		devpath := c.String(`dev-path`)
+		if devpath == "" {
+			wd, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf(`failed to compute working directory: %w`, err)
+			}
+			devpath = wd
+		}
+		rel, err := filepath.Rel(tmpDir, devpath)
+		if err != nil {
+			return fmt.Errorf(`failed to compute relative path betwen %q and %q: %w`, tmpDir, devpath, err)
+		}
+		variables[`DevPath`] = rel
+	}
+
 	ctx := genCtx{
-		srcDir:           srcDir,
-		srcPkg:           filepath.Clean(filepath.Join(parsedMod.Module.Mod.Path, schemaDir)),
-		srcModule:        srcModule,
-		srcModulePath:    rel,
-		srcModuleVersion: srcModuleVersion,
-		dstDir:           dstDir,
-		tmpDir:           tmpDir,
-		usrDirs:          usrDirs,
-		devMode:          c.Bool(`dev-mode`),
-		devPath:          c.String(`dev-path`),
-		genHasMethods:    c.Bool(`with-has-methods`),
-		genBuilders:      c.Bool(`with-builders`),
-		withKeyPrefix:    c.Bool(`with-key-prefix`),
+		srcDir:    srcDir,
+		dstDir:    dstDir,
+		tmpDir:    tmpDir,
+		usrDirs:   usrDirs,
+		variables: variables,
 	}
 
 	schemas, err := app.extractStructs(&ctx)
@@ -344,45 +391,10 @@ func init() {
 	sepStr = sb.String()
 }
 
-func (app *App) makeVars(ctx *genCtx) (map[string]interface{}, error) {
-	vars := map[string]interface{}{
-		"SrcPkg":             ctx.srcPkg,
-		"SrcModule":          ctx.srcModule,
-		"SrcModulePath":      ctx.srcModulePath,
-		"SrcModuleVersion":   ctx.srcModuleVersion,
-		"UserTemplateDirs":   ctx.usrDirs,
-		"GenerateBuilders":   ctx.genBuilders,
-		"GenerateHasMethods": ctx.genHasMethods,
-		"WithKeyNamePrefix":  ctx.withKeyPrefix,
-	}
-
-	if ctx.devMode {
-		devpath := ctx.devPath
-		if devpath == "" {
-			wd, err := os.Getwd()
-			if err != nil {
-				return nil, fmt.Errorf(`failed to compute working directory: %w`, err)
-			}
-			devpath = wd
-		}
-		rel, err := filepath.Rel(ctx.tmpDir, devpath)
-		if err != nil {
-			return nil, fmt.Errorf(`failed to compute relative path betwen %q and %q: %w`, ctx.tmpDir, devpath, err)
-		}
-		vars["DevPath"] = rel
-	}
-
-	return vars, nil
-}
-
 func (app *App) generateGoMod(ctx *genCtx, tmpl *template.Template) error {
 	var buf bytes.Buffer
 
-	vars, err := app.makeVars(ctx)
-	if err != nil {
-		return fmt.Errorf(`failed to build variable map: %w`, err)
-	}
-	if err := tmpl.ExecuteTemplate(&buf, "go.mod", vars); err != nil {
+	if err := tmpl.ExecuteTemplate(&buf, "go.mod", ctx.variables); err != nil {
 		return fmt.Errorf(`failed to execute template "go.mod": %w`, err)
 	}
 
@@ -405,33 +417,48 @@ func (app *App) generateCompilerMain(ctx *genCtx, tmpl *template.Template, schem
 	}
 	defer f.Close()
 
-	vars, err := app.makeVars(ctx)
-	if err != nil {
-		return fmt.Errorf(`failed to build variable map: %w`, err)
+	localVars := make(map[string]interface{})
+	for k, v := range ctx.variables {
+		localVars[k] = v
 	}
-	vars["Schemas"] = schemaMap
-	if err := tmpl.ExecuteTemplate(f, "compiler.go", vars); err != nil {
+	localVars["Schemas"] = schemaMap
+	if err := tmpl.ExecuteTemplate(f, "compiler.go", localVars); err != nil {
 		return fmt.Errorf(`failed to execute template "go.mod": %w`, err)
 	}
 	return nil
 }
 
 func (app *App) buildCompiler(ctx *genCtx) error {
+	dumpMain := func() {
+		f, err := os.Open(filepath.Join(ctx.tmpDir, "main.go"))
+		if err == nil {
+			defer f.Close()
+
+			scanner := bufio.NewScanner(f)
+			i := 1
+			for scanner.Scan() {
+				fmt.Fprintf(os.Stderr, "%04d: %s\n", i, scanner.Text())
+				i++
+			}
+		}
+	}
 	cmd := exec.Command("go", "mod", "tidy")
 	cmd.Dir = ctx.tmpDir
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
+		dumpMain()
 		return fmt.Errorf(`failed to run go mod tidy: %w`, err)
 	}
 
-	cmd = exec.Command("go", "build", "-o", "sketch")
+	cmd = exec.Command("go", "build", "-o", "sketch-compiler")
 	cmd.Dir = ctx.tmpDir
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
+		dumpMain()
 		return fmt.Errorf(`failed to run go build:%w`, err)
 	}
 
-	cmd = exec.Command("./sketch", ctx.dstDir)
+	cmd = exec.Command("./sketch-compiler", ctx.dstDir)
 	cmd.Dir = ctx.tmpDir
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
