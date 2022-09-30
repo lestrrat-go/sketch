@@ -122,6 +122,29 @@ func (b Base) Name() string {
 	return b.StringVar(`DefaultName`)
 }
 
+// BuilderName returns the name of the Builder object.
+// By default a name comprising of the return value from schema's `Name()`
+// method and `Builder` will be used (e.g. "FooBuilder").
+//
+// If you are using an unexported name for your schema, you probably
+// want to provide your own `BuilderName()` and `BuilderResultType()`
+// methods, which control the struct name of the builder, and the
+// returning value from calling `Build()` on the builder, respectively
+func (b Base) BuilderName() string {
+	return b.StringVar(`DefaultBuilderName`)
+}
+
+// BuilderResultType returns the name of the type that the builder
+// object returns upon calling `Build()`.
+//
+// If you are using an unexported name for your schema, you probably
+// want to provide your own `BuilderName()` and `BuilderResultType()`
+// methods, which control the struct name of the builder, and the
+// returning value from calling `Build()` on the builder, respectively
+func (b Base) BuilderResultType() string {
+	return b.StringVar(`DefaultBuilderResultType`)
+}
+
 // Package returns the name of the package that a schema belongs to.
 // By default this value is set to the last element of the destination
 // directory. For example, if you are generating files under `/home/lestrrat/foo`,

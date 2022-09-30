@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -26,6 +27,28 @@ import (
 var embedded embed.FS
 
 type App struct {
+	verbose bool
+}
+
+func (app *App) Infof(f string, args ...interface{}) {
+	if !app.verbose {
+		return
+	}
+	if !strings.HasPrefix(f, "\n") {
+		f += "\n"
+	}
+	fmt.Fprintf(os.Stdout, f, args...)
+}
+
+func (app *App) DumpJSON(v interface{}) {
+	txt, err := json.MarshalIndent(v, "", "   ")
+	if err != nil {
+		return
+	}
+	scanner := bufio.NewScanner(bytes.NewReader(txt))
+	for scanner.Scan() {
+		app.Infof("     | %s", scanner.Text())
+	}
 }
 
 type genCtx struct {
@@ -43,6 +66,15 @@ func (app *App) Run(args []string) error {
 		Usage:  "Generate code from schema",
 		Action: app.RunMain,
 		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "verbose",
+				Usage: "Output verbose logging to stdout",
+			},
+			&cli.BoolFlag{
+				Name:  "remove-tmpdir",
+				Usage: "Set to false to inspect intermediate artifacts (default: false)",
+				Value: true,
+			},
 			&cli.BoolFlag{
 				Name:  "dev-mode",
 				Usage: "enable developer mode (only for sketch devs)",
@@ -97,6 +129,8 @@ func (app *App) RunMain(c *cli.Context) error {
 		return fmt.Errorf(`schema directory must be supplied`)
 	}
 
+	app.verbose = c.Bool(`verbose`)
+
 	variables := make(map[string]interface{})
 	if vars := c.StringSlice(`var`); len(vars) > 0 {
 		for _, sv := range vars {
@@ -130,10 +164,15 @@ func (app *App) RunMain(c *cli.Context) error {
 	}
 
 	srcDir := c.Args().Get(0)
+
+	app.Infof(`👉 Accepted src directory %q`, srcDir)
 	// srcDir must be absolute
 	absSrcDir, err := filepath.Abs(srcDir)
 	if err != nil {
 		return fmt.Errorf(`failed to get absolute path for %q: %w`, srcDir, err)
+	}
+	if srcDir != absSrcDir {
+		app.Infof(`   ✅ Converted src directory to %q`, absSrcDir)
 	}
 	srcDir = absSrcDir
 
@@ -157,7 +196,16 @@ func (app *App) RunMain(c *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf(`failed to create temporary directory: %w`, err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if !c.Bool(`remove-tmpdir`) {
+			app.Infof(`👉 NOT removing temporary working directory %q`, tmpDir)
+			return
+		}
+
+		app.Infof(`👉 Removing temporary working directory %q`, tmpDir)
+		os.RemoveAll(tmpDir)
+	}()
+	app.Infof(`👉 Created temporary working directory %q`, tmpDir)
 
 	var moduleDir string
 	var gomodFn string
@@ -176,10 +224,7 @@ func (app *App) RunMain(c *cli.Context) error {
 		return fmt.Errorf(`failed to find go.mod`)
 	}
 
-	rel, err := filepath.Rel(tmpDir, moduleDir)
-	if err != nil {
-		return fmt.Errorf(`failed to find relative path for %q: %w`, moduleDir, err)
-	}
+	app.Infof(`👉 Accepted module directory %q`, moduleDir)
 
 	gomodContent, err := os.ReadFile(gomodFn)
 	if err != nil {
@@ -214,7 +259,7 @@ func (app *App) RunMain(c *cli.Context) error {
 	variables[`GenerateBuilders`] = c.Bool(`with-builders`)
 	variables[`GenerateHasMethods`] = c.Bool(`with-has-methods`)
 	variables[`SrcModule`] = srcModule
-	variables[`SrcModulePath`] = rel
+	variables[`SrcModulePath`] = moduleDir
 	variables[`SrcModuleVersion`] = srcModuleVersion
 	variables[`SrcPkg`] = filepath.Clean(filepath.Join(parsedMod.Module.Mod.Path, schemaDir))
 	variables[`UserTemplateDirs`] = usrDirs
@@ -228,11 +273,7 @@ func (app *App) RunMain(c *cli.Context) error {
 			}
 			devpath = wd
 		}
-		rel, err := filepath.Rel(tmpDir, devpath)
-		if err != nil {
-			return fmt.Errorf(`failed to compute relative path betwen %q and %q: %w`, tmpDir, devpath, err)
-		}
-		variables[`DevPath`] = rel
+		variables[`DevPath`] = devpath
 	}
 
 	ctx := genCtx{
@@ -392,6 +433,10 @@ func init() {
 }
 
 func (app *App) generateGoMod(ctx *genCtx, tmpl *template.Template) error {
+	app.Infof(`👉 Generating go.mod`)
+	app.Infof(`  👉 Rendering template with following variables:`)
+	app.DumpJSON(ctx.variables)
+
 	var buf bytes.Buffer
 
 	if err := tmpl.ExecuteTemplate(&buf, "go.mod", ctx.variables); err != nil {
@@ -410,6 +455,7 @@ func (app *App) generateGoMod(ctx *genCtx, tmpl *template.Template) error {
 }
 
 func (app *App) generateCompilerMain(ctx *genCtx, tmpl *template.Template, schemaMap map[string]string) error {
+	app.Infof(`👉 Generating main.go`)
 	dstpath := filepath.Join(ctx.tmpDir, `main.go`)
 	f, err := os.OpenFile(dstpath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
@@ -422,6 +468,8 @@ func (app *App) generateCompilerMain(ctx *genCtx, tmpl *template.Template, schem
 		localVars[k] = v
 	}
 	localVars["Schemas"] = schemaMap
+	app.Infof(`  👉 Rendering template with following variables:`)
+	app.DumpJSON(localVars)
 	if err := tmpl.ExecuteTemplate(f, "compiler.go", localVars); err != nil {
 		return fmt.Errorf(`failed to execute template "go.mod": %w`, err)
 	}
@@ -442,22 +490,27 @@ func (app *App) buildCompiler(ctx *genCtx) error {
 			}
 		}
 	}
+
+	app.Infof(`👉 Running "go mod tidy"`)
 	cmd := exec.Command("go", "mod", "tidy")
 	cmd.Dir = ctx.tmpDir
 	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
 	if err := cmd.Run(); err != nil {
 		dumpMain()
 		return fmt.Errorf(`failed to run go mod tidy: %w`, err)
 	}
 
+	app.Infof(`👉 Running "go build -o sketch-compiler"`)
 	cmd = exec.Command("go", "build", "-o", "sketch-compiler")
 	cmd.Dir = ctx.tmpDir
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		dumpMain()
-		return fmt.Errorf(`failed to run go build:%w`, err)
+		return fmt.Errorf(`failed to run go build: %w`, err)
 	}
 
+	app.Infof(`👉 Running "./sketch-compiler"`)
 	cmd = exec.Command("./sketch-compiler", ctx.dstDir)
 	cmd.Dir = ctx.tmpDir
 	cmd.Stderr = os.Stderr

@@ -66,6 +66,8 @@ func _main() error {
 	    "DefaultKeyNamePrefix": {{ if $.WithKeyNamePrefix }}{{ $name | printf "%q" }}{{ else }}""{{ end }},
 	    "DefaultName": {{ $name | printf "%q" }},
 	    "DefaultPkg": defaultPkg,
+            "DefaultBuilderName": {{ $name | printf "%sBuilder" | printf "%q" }},
+            "DefaultBuilderResultType": {{ $name | printf "*%s" | printf "%q" }},
           },
 	},
       },

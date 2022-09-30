@@ -1,5 +1,5 @@
 {{ define "object/builder" }}
-{{- $builderName := (printf "%sBuilder" .Name) }}
+{{- $builderName := .BuilderName}}
 type {{ $builderName }} struct {
   mu sync.Mutex
   err error
@@ -45,7 +45,7 @@ func (b *{{ $builderName }}) {{ $field.GetName }}(in {{ if $type.SliceStyleIniti
 }
 {{- end }}
 
-func (b *{{ $builderName }}) Build() (*{{ .Name }}, error) {
+func (b *{{ $builderName }}) Build() ({{ .BuilderResultType }}, error) {
   b.mu.Lock()
   defer b.mu.Unlock()
 
@@ -66,7 +66,7 @@ func (b *{{ $builderName }}) Build() (*{{ .Name }}, error) {
   return obj, nil
 }
 
-func (b *{{ $builderName }}) MustBuild() *{{ .Name }} {
+func (b *{{ $builderName }}) MustBuild() {{ .BuilderResultType }} {
   object, err := b.Build()
   if err != nil {
     panic(err)
