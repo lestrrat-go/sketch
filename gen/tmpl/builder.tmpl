@@ -29,7 +29,7 @@ func (b *{{ $builderName }}) initialize() {
 {{- $type := $field.GetType }}
 {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
 {{- if (not ($field.GetName | printf "builder.%s" | $.GenerateMethod)) }}{{ continue }}{{ end }}
-func (b *{{ $builderName }}) {{ $field.GetName }}(in {{ if $type.SliceStyleInitializerArgument }}...{{ $type.GetElement }}{{ else }}{{ $type.GetUserFacingType }}{{ end }}) *{{ $builderName }} {
+func (b *{{ $builderName }}) {{ $field.GetName }}(in {{ if $type.SliceStyleInitializerArgument }}...{{ $type.GetElement }}{{ else }}{{ $type.GetApparentType }}{{ end }}) *{{ $builderName }} {
   b.mu.Lock()
   defer b.mu.Unlock()
 

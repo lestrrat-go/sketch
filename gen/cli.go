@@ -18,7 +18,6 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/lestrrat-go/xstrings"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/mod/modfile"
 )
@@ -162,6 +161,7 @@ func (app *App) RunMain(c *cli.Context) error {
 			}
 		}
 	}
+	variables["Verbose"] = app.verbose
 
 	srcDir := c.Args().Get(0)
 
@@ -414,11 +414,7 @@ func (app *App) genCompiler(ctx *genCtx, schemas []*DeclaredSchema) error {
 		return fmt.Errorf(`failed to generate go.mod: %w`, err)
 	}
 
-	schemaMap := make(map[string]string)
-	for _, schema := range schemas {
-		schemaMap[xstrings.Snake(schema.Name)+"_gen.go"] = schema.Name
-	}
-	if err := app.generateCompilerMain(ctx, tmpl, schemaMap); err != nil {
+	if err := app.generateCompilerMain(ctx, tmpl, schemas); err != nil {
 		return fmt.Errorf(`failed to generate compiler code: %w`, err)
 	}
 	return nil
@@ -439,7 +435,7 @@ func (app *App) generateGoMod(ctx *genCtx, tmpl *template.Template) error {
 
 	var buf bytes.Buffer
 
-	if err := tmpl.ExecuteTemplate(&buf, "go.mod", ctx.variables); err != nil {
+	if err := tmpl.ExecuteTemplate(&buf, "compiler/go.mod", ctx.variables); err != nil {
 		return fmt.Errorf(`failed to execute template "go.mod": %w`, err)
 	}
 
@@ -454,7 +450,7 @@ func (app *App) generateGoMod(ctx *genCtx, tmpl *template.Template) error {
 	return nil
 }
 
-func (app *App) generateCompilerMain(ctx *genCtx, tmpl *template.Template, schemaMap map[string]string) error {
+func (app *App) generateCompilerMain(ctx *genCtx, tmpl *template.Template, schemas []*DeclaredSchema) error {
 	app.Infof(`👉 Generating main.go`)
 	dstpath := filepath.Join(ctx.tmpDir, `main.go`)
 	f, err := os.OpenFile(dstpath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
@@ -467,10 +463,10 @@ func (app *App) generateCompilerMain(ctx *genCtx, tmpl *template.Template, schem
 	for k, v := range ctx.variables {
 		localVars[k] = v
 	}
-	localVars["Schemas"] = schemaMap
+	localVars["Schemas"] = schemas
 	app.Infof(`  👉 Rendering template with following variables:`)
 	app.DumpJSON(localVars)
-	if err := tmpl.ExecuteTemplate(f, "compiler.go", localVars); err != nil {
+	if err := tmpl.ExecuteTemplate(f, "compiler/main.go", localVars); err != nil {
 		return fmt.Errorf(`failed to execute template "go.mod": %w`, err)
 	}
 	return nil

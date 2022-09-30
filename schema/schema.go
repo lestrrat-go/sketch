@@ -184,18 +184,31 @@ func (b Base) KeyNamePrefix() string {
 }
 
 // TypeInfo is used to store information about a type, and contains
-// various pieces of hints to generate objects/builders
+// various pieces of hints to generate objects/builders.
+//
+// One important concept that you need to be aware of is that of
+// Apparent Types and Storage Types. An apparent type refers to the
+// type that the end user sees. The pparent type may or may not
+// match the storage type, which is the type that the generated
+// object stores the data as.
+//
+// For example, you may want to expose a field as accepting a slice
+// of strings (`[]string`), but store it as an object, maybe something
+// like a custom `StringList` that you created. In this case
+// `[]string` is the apparent type, and `StringList` is the storage type.
+//
+// The `TypeInfo` object is meant to store the storage type, but
+// you can associate the corresponding apparent type via the
+// `ApparentType` method.
 type TypeInfo struct {
-	kind             reflect.Kind
+	name             string
+	element          string
+	apparentType     string
 	implementsGet    bool
 	implementsAccept bool
 	indirectType     string
 	initArgStyle     InitializerArgumentStyle
-	isMap            bool
-	isSlice          bool
-	element          string
-	name             string
-	userFacingType   string
+	supportsLen      bool
 	zeroVal          string
 }
 
@@ -238,41 +251,51 @@ func TypeInfoFrom(v interface{}) *TypeInfo {
 
 	var implementsGet bool
 	if m, ok := rv.MethodByName(`Get`); ok {
-		implementsGet = m.Type.NumIn() == 0 && m.Type.NumOut() == 1
+		implementsGet = m.Type.NumIn() == 1 && m.Type.NumOut() == 1
 	}
 
 	var implementsAccept bool
 	if m, ok := rv.MethodByName(`Accept`); ok {
 		implementsAccept =
-			m.Type.NumIn() == 1 &&
-				m.Type.In(0) == typInterface &&
+			m.Type.NumIn() == 2 &&
+				m.Type.In(1) == typInterface &&
 				m.Type.NumOut() == 1 &&
 				m.Type.Out(0) == typError
 	}
 
-	var isMap bool
-	var isSlice bool
+	// If the type implements the Get() xxxx interface, we can deduce
+	// the apparent type from the return type
+	apparentType := rv
+	if implementsGet {
+		m, _ := rv.MethodByName(`Get`)
+		apparentType = m.Type.Out(0)
+	}
+
 	var initArgStyle InitializerArgumentStyle
+
+	// The initialization style depends on the apparent
 	element := "sketch.UnknownType" // so it's easier to see
-	switch kind := rv.Kind(); kind {
-	case reflect.Map:
-		isMap = true
-	case reflect.Slice:
-		isSlice = true
-		element = typeName(rv.Elem())
+	if apparentType.Kind() == reflect.Slice {
+		element = typeName(apparentType.Elem())
 		initArgStyle = InitializerArgumentAsSlice
+	}
+
+	// Check if the storage type supports len() operation
+	var supportsLen bool
+	switch rv.Kind() {
+	case reflect.Slice, reflect.Map, reflect.Chan:
+		supportsLen = true
 	}
 
 	return &TypeInfo{
 		name:             typ,
+		apparentType:     typeName(apparentType),
+		element:          element,
 		implementsGet:    implementsGet,
 		implementsAccept: implementsAccept,
 		initArgStyle:     initArgStyle,
 		indirectType:     indirectType,
-		isMap:            isMap,
-		isSlice:          isSlice,
-		element:          element,
-		userFacingType:   typ,
+		supportsLen:      supportsLen,
 		zeroVal:          fmt.Sprintf("%#v", reflect.Zero(rv)),
 	}
 }
@@ -303,9 +326,16 @@ func Type(name string) *TypeInfo {
 		element = strings.TrimPrefix(name, `[]`)
 	}
 
+	var supportsLen bool
+	if isSlice || isMap {
+		supportsLen = true
+	}
+
 	var indirectType string
 	if strings.HasPrefix(name, `*`) || (isSlice || isMap) {
 		indirectType = name
+	} else {
+		indirectType = `*` + name
 	}
 
 	return &TypeInfo{
@@ -313,8 +343,7 @@ func Type(name string) *TypeInfo {
 		element:      element,
 		indirectType: indirectType,
 		initArgStyle: initArgStyle,
-		isSlice:      isSlice,
-		isMap:        isMap,
+		supportsLen:  supportsLen,
 		zeroVal:      `nil`,
 	}
 }
@@ -339,8 +368,8 @@ func (ti *TypeInfo) ImplementsAccept(b bool) *TypeInfo {
 	return ti
 }
 
-func (ti *TypeInfo) UserFacingType(s string) *TypeInfo {
-	ti.userFacingType = s
+func (ti *TypeInfo) ApparentType(s string) *TypeInfo {
+	ti.apparentType = s
 	return ti
 }
 
@@ -350,7 +379,7 @@ func (ti *TypeInfo) GetName() string {
 
 // GetImplementsGet returns true if the object contains a method named `Get`
 // which returns a single return value. The return value is expected
-// to be the UserFacingType
+// to be the ApparentType
 func (ti *TypeInfo) GetImplementsGet() bool {
 	return ti.implementsGet
 }
@@ -363,8 +392,8 @@ func (ti *TypeInfo) GetZeroVal() string {
 	return ti.zeroVal
 }
 
-func (ti *TypeInfo) GetUserFacingType() string {
-	typ := ti.userFacingType
+func (ti *TypeInfo) GetApparentType() string {
+	typ := ti.apparentType
 	if typ == "" {
 		typ = ti.name
 	}
@@ -375,21 +404,12 @@ func (ti *TypeInfo) GetElement() string {
 	return ti.element
 }
 
-func (ti *TypeInfo) GetIsMap() bool {
-	return ti.isMap
+func (ti *TypeInfo) GetSupportsLen() bool {
+	return ti.supportsLen
 }
 
-func (ti *TypeInfo) GetIsSlice() bool {
-	return ti.isSlice
-}
-
-func (ti *TypeInfo) IsMap(b bool) *TypeInfo {
-	ti.isMap = b
-	return ti
-}
-
-func (ti *TypeInfo) IsSlice(b bool) *TypeInfo {
-	ti.isSlice = b
+func (ti *TypeInfo) SupportsLen(b bool) *TypeInfo {
+	ti.supportsLen = b
 	return ti
 }
 
@@ -423,7 +443,7 @@ type Field struct {
 	unexportedName string
 	json           string
 	indirectType   string
-	userFacingType string
+	apparentType   string
 	comment        string
 	extension      bool
 }
@@ -519,15 +539,7 @@ func (f *Field) GetJSON() string {
 }
 
 func (ti *TypeInfo) GetIndirectType() string {
-	typ := ti.indirectType
-	if typ != "" {
-		return typ
-	}
-	if ti.isSlice || ti.isMap {
-		return ti.name
-	} else {
-		return `*` + ti.name
-	}
+	return ti.indirectType
 }
 
 // SExtension declares the field as an extension, and not part of the object

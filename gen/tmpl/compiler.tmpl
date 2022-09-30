@@ -1,4 +1,4 @@
-{{ define "go.mod" }}
+{{ define "compiler/go.mod" }}
 module local.path/sketch/compiler
 
 require (
@@ -14,7 +14,7 @@ replace (
 )
 {{ end }}
 
-{{ define "compiler.go" }}
+{{ define "compiler/main.go" }}
 package main
 
 import (
@@ -23,13 +23,14 @@ import (
   "fmt"
   "path/filepath"
   "os"
-  "sort"
+  "strings"
   "text/template"
 
   src "{{ .SrcPkg }}"
   "github.com/lestrrat-go/sketch"
   "github.com/lestrrat-go/sketch/schema"
   "github.com/lestrrat-go/codegen"
+  "github.com/lestrrat-go/xstrings"
 )
 
 //go:embed  tmpl/*
@@ -54,20 +55,19 @@ func _main() error {
     Name string
     Schema schema.Interface
   } {
-{{- range $fn, $name := .Schemas }}
+{{- range $i, $schema := .Schemas }}
     {
-      Filename: {{ $fn | printf "%q"}},
-      Name: {{ $name | printf "%q" }},
-      Schema: &src.{{ $name }}{
+      Name: {{ $schema.Name | printf "%q" }},
+      Schema: &src.{{ $schema.Name }}{
       	Base: schema.Base{
 	  Variables: map[string]interface{}{
 	    "DefaultGenerateBuilders": {{ $.GenerateBuilders }},
 	    "DefaultGenerateHasMethods": {{ $.GenerateHasMethods }},
-	    "DefaultKeyNamePrefix": {{ if $.WithKeyNamePrefix }}{{ $name | printf "%q" }}{{ else }}""{{ end }},
-	    "DefaultName": {{ $name | printf "%q" }},
+	    "DefaultKeyNamePrefix": {{ if $.WithKeyNamePrefix }}{{ $schema.Name | printf "%q" }}{{ else }}""{{ end }},
+	    "DefaultName": {{ $schema.Name | printf "%q" }},
 	    "DefaultPkg": defaultPkg,
-            "DefaultBuilderName": {{ $name | printf "%sBuilder" | printf "%q" }},
-            "DefaultBuilderResultType": {{ $name | printf "*%s" | printf "%q" }},
+            "DefaultBuilderName": {{ $schema.Name | printf "%sBuilder" | printf "%q" }},
+            "DefaultBuilderResultType": {{ $schema.Name | printf "*%s" | printf "%q" }},
           },
 	},
       },
@@ -87,18 +87,50 @@ func _main() error {
     return fmt.Errorf(`failed to parse template: %w`, err)
   }
 
-  if err := executeGoCodeTemplateToFile(tmpl, "object/common", filepath.Join(outputDir, "sketch_gen.go"), map[string]interface{}{ "Package": defaultPkg }); err != nil {
-    return fmt.Errorf(`failed to render template %s: %w`, "object/common", err)
+  execFileTemplate := func(tmpl *template.Template, tmplname, filename string, vars interface{}) error {
+    filename = filepath.Join(outputDir, filename)
+
+    base := filepath.Base(filename)
+    if i := strings.LastIndex(base, "."); i > 0 {
+      filename = filepath.Join(filepath.Dir(filename), base[:i]+`_gen`+base[i:])
+    } else {
+      filename = filename + `_gen`
+    }
+{{- if .Verbose }}
+    fmt.Fprintf(os.Stdout, "👉 Generating file %s\n", filename)
+{{- end }}
+    return executeGoCodeTemplateToFile(tmpl, tmplname, filename, vars)
   }
 
-  for _, src := range srcs {
-    fields := src.Schema.Fields()
-    sort.Slice(fields, func(i, j int) bool {
-      return fields[i].GetName() < fields[j].GetName()
-    })
-
-    if err := executeGoCodeTemplateToFile(tmpl, "object", filepath.Join(outputDir, src.Filename), src.Schema); err != nil {
-      return fmt.Errorf(`failed to render template %s: %w`, "object", err)
+  for _, tt := range tmpl.Templates() {
+    switch {
+    case strings.HasPrefix(tt.Name(), `files/per-object/`):
+      for _, src := range srcs {
+        name := strings.TrimPrefix(tt.Name(), `files/per-object/`)
+        // we prepend the name of this object to the remaining `name`, EXCEPT
+        // when the name is `object.go`, which is special.
+        if name == `object.go` {
+          name = xstrings.Snake(src.Name) + `.go`
+        } else {
+	  // default case would be prepend the object name
+	  // so foo/bar/baz.go would be rendered as foo/bar/object_name_baz.go (and then changed to xxx_gen.go)
+	  name = filepath.FromSlash(name)
+	  name = filepath.Join(filepath.Dir(name), xstrings.Snake(src.Name) + filepath.Base(name))
+        }
+        
+        if err := execFileTemplate(tmpl, tt.Name(), name, src.Schema); err != nil {
+          return fmt.Errorf(`failed to execute template for object %q: %w`, src.Name, err)
+	}
+      }
+    case strings.HasPrefix(tt.Name(), `files/per-run/`):
+      schemas := make([]schema.Interface, len(srcs))
+      for i, src := range srcs {
+        schemas[i] = src.Schema
+      }
+      name := filepath.FromSlash(strings.TrimPrefix(tt.Name(), `files/per-run/`))
+      if err := execFileTemplate(tmpl, tt.Name(), name, map[string]interface{}{ "Package": defaultPkg, "Schemas": schemas }); err != nil {
+        return fmt.Errorf(`failed to execute templae for %q: %w`, name, err)
+      }
     }
   }
   return nil
