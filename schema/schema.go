@@ -145,6 +145,13 @@ func (b Base) BuilderResultType() string {
 	return b.StringVar(`DefaultBuilderResultType`)
 }
 
+// CloneResultType returns the name of the type that the `Clone` method
+// returns. Normally this is set to the pointer to the object, but
+// sometimes you may need to return an interface.
+func (b Base) CloneResultType() string {
+	return b.StringVar(`DefaultCloneResultType`)
+}
+
 // Package returns the name of the package that a schema belongs to.
 // By default this value is set to the last element of the destination
 // directory. For example, if you are generating files under `/home/lestrrat/foo`,
@@ -160,6 +167,11 @@ func (b Base) Package() string {
 // schema object. User usually must
 func (Base) Fields() []*Field {
 	return []*Field(nil)
+}
+
+// Imports returns the list of packges to be imported.
+func (Base) Imports() []string {
+	return []string(nil)
 }
 
 // Comment returns the comment that should go withh the generated object.

@@ -43,6 +43,11 @@ func main() {
   }
 }
 
+type Src struct {
+  Name string
+  Schema schema.Interface
+}
+
 func _main() error {
   if len(os.Args) < 2 {
     return fmt.Errorf(`Usage: sketch [output-dir]`)
@@ -50,30 +55,35 @@ func _main() error {
 
   outputDir := os.Args[1]
   defaultPkg := filepath.Base(outputDir)
-  srcs := []struct {
-    Filename string
-    Name string
-    Schema schema.Interface
-  } {
+  srcs := make([]Src, {{ (len .Schemas) }})
+
 {{- range $i, $schema := .Schemas }}
-    {
-      Name: {{ $schema.Name | printf "%q" }},
-      Schema: &src.{{ $schema.Name }}{
-      	Base: schema.Base{
-	  Variables: map[string]interface{}{
-	    "DefaultGenerateBuilders": {{ $.GenerateBuilders }},
-	    "DefaultGenerateHasMethods": {{ $.GenerateHasMethods }},
-	    "DefaultKeyNamePrefix": {{ if $.WithKeyNamePrefix }}{{ $schema.Name | printf "%q" }}{{ else }}""{{ end }},
-	    "DefaultName": {{ $schema.Name | printf "%q" }},
-	    "DefaultPkg": defaultPkg,
-            "DefaultBuilderName": {{ $schema.Name | printf "%sBuilder" | printf "%q" }},
-            "DefaultBuilderResultType": {{ $schema.Name | printf "*%s" | printf "%q" }},
-          },
-	},
+  {{- $varname := ($i | printf "s%d") }}
+  {{ $varname }} := &src.{{ $schema.Name }}{
+    Base: schema.Base{
+      Variables: map[string]interface{}{
+        "DefaultGenerateBuilders": {{ $.GenerateBuilders }},
+        "DefaultGenerateHasMethods": {{ $.GenerateHasMethods }},
+        "DefaultPkg": defaultPkg,
       },
     },
-{{- end }}
   }
+  {{ $varname }}Name := {{ $varname }}.Name()
+  if {{ $varname }}Name == "" {
+    {{ $varname }}Name = {{ $schema.Name | printf "%q" }}
+  }
+  {{ $varname }}.Base.Variables["DefaultName"] = {{ $varname }}Name
+  {{ $varname }}.Base.Variables["DefaultBuilderName"] = {{ $varname }}Name + "Builder"
+  {{ $varname }}.Base.Variables["DefaultBuilderResultType"] = "*" + {{ $varname }}Name
+  {{ $varname }}.Base.Variables["DefaultCloneResultType"] = "*" + {{ $varname }}Name
+  {{- if $.WithKeyNamePrefix }}
+  {{ $varname }}.Base.Variables["DefaultKeyNamePrefix"] = {{ $varname }}Name
+  {{- end }}
+  srcs[{{ $i }}] = Src{
+    Schema: {{ $varname }},
+    Name: {{ $schema.Name | printf "%q" }}, {{- /* This is deliberately set toe $schema.Name */ -}}
+  }
+{{- end }}
 
   var tt sketch.Template
 
