@@ -101,6 +101,21 @@ func (b Base) GenerateMethod(s string) bool {
 	return true
 }
 
+func (b Base) MethodName(s string) string {
+	v, ok := b.Variables["DefaultMethodNames"]
+	if ok {
+		m, ok := v.(map[string]string)
+		if ok {
+			n, ok := m[s]
+			if ok {
+				return n
+			}
+		}
+	}
+	i := strings.LastIndexByte(s, '.')
+	return s[i+1:]
+}
+
 // Name returns the name of the object to be generated. By default this
 // value is set to the name of the schema object you created. Users may
 // configure a different name by providing their own `Name` method.

@@ -7,17 +7,9 @@ import (
   "fmt"
 )
 
-// extraFieldDecoder is used to decode fields that are not defined
-// within an object. You may override it to provide custom behavior
-var extraFieldsDecoder func(string, *json.Decoder, interface{}) error
-
 type fieldPair struct {
   Name string
   Value interface{}
-}
-
-func init() {
-  extraFieldsDecoder = defaultDecodeExtra
 }
 
 func defaultDecodeExtra(name string, dec *json.Decoder, dst interface{}) error {
@@ -273,7 +265,16 @@ func (v *{{ $objectName }}) MarshalJSON() ([]byte, error) {
 }
 {{ end -}}
 
-{{ if .GenerateMethod "object.UnmarshalJSON" -}}
+{{ if .GenerateMethod "object.method.decodeExtraField" }}
+func (v *{{ $objectName }}) decodeExtraField(name string, dec *json.Decoder, dst interface{}) error {
+  if err := dec.Decode(dst); err != nil {
+    return fmt.Errorf(`failed to decode value for %q: %w`, name, err)
+  }
+  return nil
+}
+{{- end }}
+
+{{ if .GenerateMethod "object.method.UnmarshalJSON" -}}
 // UnmarshalJSON deserializes a piece of JSON data into {{ $objectName }}.
 //
 // Pre-defined fields must be deserializable via "encoding/json" to their
@@ -328,9 +329,9 @@ LOOP:
 {{- end }}
       default:
         var val interface{}
-        if err := extraFieldsDecoder(tok, dec, &val); err != nil {
-	  return err
-	}
+        if err := v.decodeExtraField(tok, dec, &val); err != nil {
+          return fmt.Errorf(`failed to decode value for %q: %w`, tok, err)
+        }
         if extra == nil {
           extra = make(map[string]interface{})
         }
