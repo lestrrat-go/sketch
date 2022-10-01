@@ -173,10 +173,6 @@ You can use the internal names (show below) to specify that certain exclude part
 | `(Builder).Build` | `builder.method.Build` | Method to build and return the object from the Builder |
 | `(Builder).MustBuild` | `builder.method.MustBuild` | Method to build and return the object from the Builder |
 
-   FieldC(...).
-   MustBuild()
-```
-
 # Templates
 
 ## Syntax 
