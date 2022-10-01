@@ -65,15 +65,12 @@ func (tmpl *Template) makeFuncs(tt **template.Template) template.FuncMap {
 	}
 }
 
-func (tmpl *Template) comment(tt **template.Template) func(string, string) string {
-	return func(src string, name string) string {
+func (tmpl *Template) comment(tt **template.Template) func(string, interface{}) string {
+	return func(src string, arg interface{}) string {
 		if src == "" {
 			return ""
 		}
 
-		// Comments _ALWAYS_ start with the name of the subject, which should
-		// be provided by our caller
-		src = "{{ .Name }} " + src
 		tmpl, err := template.New("comment").Parse(src)
 		if err != nil {
 			panic(err)
@@ -81,7 +78,7 @@ func (tmpl *Template) comment(tt **template.Template) func(string, string) strin
 
 		var sb strings.Builder
 		sb.WriteString(`// `)
-		if err := tmpl.Execute(&sb, map[string]string{"Name": name}); err != nil {
+		if err := tmpl.Execute(&sb, arg); err != nil {
 			panic(err)
 		}
 		return sb.String()

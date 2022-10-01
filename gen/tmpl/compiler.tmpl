@@ -23,6 +23,7 @@ import (
   "fmt"
   "path/filepath"
   "os"
+  "regexp"
   "strings"
   "text/template"
 
@@ -35,6 +36,7 @@ import (
 
 //go:embed  tmpl/*
 var content embed.FS
+var _ = regexp.Compile
 
 func main() {
   if err := _main(); err != nil {
@@ -57,6 +59,18 @@ func _main() error {
   defaultPkg := filepath.Base(outputDir)
   srcs := make([]Src, {{ (len .Schemas) }})
 
+  {{- /* Build the default rule set for .GenerateMethod */ -}}
+{{ if .ExcludeMethods }}
+  excludeMethods := make([]*regexp.Regexp, {{ (len .ExcludeMethods) }})
+{{- range $i, $pattern := .ExcludeMethods }}
+  rx{{ $i }}, err := regexp.Compile({{ $pattern | printf "%q" }})
+  if err != nil {
+    return fmt.Errorf(`failed to compile pattern {{ $pattern | printf "%q" }}: %w`, err)
+  }
+  excludeMethods[{{ $i }}] = rx{{ $i }}
+{{ end }}
+{{ end }}
+
 {{- range $i, $schema := .Schemas }}
   {{- $varname := ($i | printf "s%d") }}
   {{ $varname }} := &src.{{ $schema.Name }}{
@@ -65,6 +79,16 @@ func _main() error {
         "DefaultGenerateBuilders": {{ $.GenerateBuilders }},
         "DefaultGenerateHasMethods": {{ $.GenerateHasMethods }},
         "DefaultPkg": defaultPkg,
+        "DefaultGenerateMethod": func(s string) bool {
+{{ if $.ExcludeMethods }}
+          for _, rx := range excludeMethods {
+	    if rx.MatchString(s) {
+	      return false
+	    }
+	  }
+{{ end }}
+	  return true
+	},
       },
     },
   }

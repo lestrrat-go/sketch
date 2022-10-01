@@ -107,7 +107,15 @@ func (b Base) GenerateBuilders() bool {
 //
 // By default all methods are allowed. Users may configure this on a per-object
 // basis by providing their own `GenerateMethod` method.
-func (Base) GenerateMethod(string) bool {
+func (b Base) GenerateMethod(s string) bool {
+	m, ok := b.Variables["DefaultGenerateMethod"]
+	if !ok {
+		return true
+	}
+
+	if m, ok := m.(func(string) bool); ok {
+		return m(s)
+	}
 	return true
 }
 

@@ -200,6 +200,16 @@ if obj.HasFieldA() { ... }
 
 Templates in `sketch` are all written using `text/template`.
 
+## Functions
+
+`sketch` provides several functions that can be used from within the template
+
+| Name | Signature | Description |
+|------|-----------|-------------|
+| comment | comment (string, any) | Formats the comment. The first argument can be a text/template style template. The second argument is the variable passed to the template. |
+| hasTemplate | hasTemplate (string) bool | Returns true if the template specified in the argument exists |
+| runTemplate | runTemplate (string, any) | Executes the named template with the second argument as the template variables |
+
 ## Variables
 
 The only available template variable is the current schema object (the one
@@ -285,3 +295,14 @@ The following is the list of template block names that you may provide.
 |------|-------------|
 | ext/object/header | Called from within object/header template |
 | ext/object/footer | Called from within object/footer template |
+
+# Command Line
+
+| Name | Description |
+|------|-------------|
+| --dst-dir=DIR | Specify the directory to write the generate files to |
+| --exclude-method=PATTERN | Specify a pattern to exclude. value may be a RE2 compatible regular expression. method names are prefixed with with a "group" name that it belongs to. May be specified multiple times |
+| --tmpl-dir=DIR | Specify a template directory provided by the user. May be specified multiple times |
+| --var=NAME=VALUE / --var=NAME=VALUE:TYPE | Specify a variable to be passed to the template as key/value pair. May optionally be followed by a type name: e.g. --var=foo=true:bool would store the value for `foo` as a Go bool instead of a string. Currently only supports `string`, `bool`, and `int` |
+| --verbose | Enable verbose logging |
+

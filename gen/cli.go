@@ -108,6 +108,10 @@ func (app *App) Run(args []string) error {
 				Aliases: []string{"t"},
 				Usage:   "user-supplied extra templates",
 			},
+			&cli.StringSliceFlag{
+				Name:  "exclude-method",
+				Usage: "Regular expression to match against method names. If they match the method will not be generated. If schemas define their own GenerateMethod, these patterns will be ignored",
+			},
 		},
 	}
 
@@ -162,6 +166,10 @@ func (app *App) RunMain(c *cli.Context) error {
 		}
 	}
 	variables["Verbose"] = app.verbose
+
+	if patterns := c.StringSlice(`exclude-method`); len(patterns) > 0 {
+		variables["ExcludeMethods"] = patterns
+	}
 
 	srcDir := c.Args().Get(0)
 

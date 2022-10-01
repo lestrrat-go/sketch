@@ -117,14 +117,40 @@ func (v *{{ $objectName }}) Set(key string, value interface{}) error {
 {{ end }}
 
 {{- if .GenerateHasMethods }}
+
+{{- if .GenerateMethod "object.Has" }}
+// Has returns true if the field specified by the argument has been populated.
+// The field name must be the JSON field name, not the Go-structure's field name.
+func (v *{{ $objectName }}) Has(name string) bool {
+  switch name {
 {{- range $i, $field := .Fields }}
 {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
+  case {{ $field.GetKeyName $ }}:
+    return v.{{ $field.GetUnexportedName }} != nil
+{{- end }}
+  default:
+    if v.extra != nil {
+      if _, ok := v.extra[name]; ok {
+        return true
+      }
+    }
+    return false
+  }
+}
+{{ end }}
+
+{{- range $i, $field := .Fields }}
+{{- if $field.GetIsExtension }}{{ continue }}{{ end }}
+{{- if $.GenerateMethod ($field.GetName | printf "object.Has%s") }}
+// Has{{ $field.GetName }} returns true if the field `{{ $field.GetJSON }}` has been populated
 func (v *{{ $objectName }}) Has{{ $field.GetName }}() bool {
   v.mu.RLock()
   defer v.mu.RUnlock()
   return v.{{ $field.GetUnexportedName }} != nil
 }
-{{ end }}
+
+{{ end }}{{- /* .GenerateMethod */ -}}
+{{- end }}
 {{- end }}
 
 {{- range $i, $field := .Fields }}
@@ -132,7 +158,7 @@ func (v *{{ $objectName }}) Has{{ $field.GetName }}() bool {
 {{- $rawType := $type.GetName }}
 {{- $indirectType := $type.GetIndirectType }}
 {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
-{{ comment $field.GetComment $field.GetName }}
+{{ comment $field.GetComment $field }}
 func (v *{{ $objectName }}) {{ $field.GetName }}() {{ $type.GetApparentType }} {
   v.mu.RLock()
   defer v.mu.RUnlock()
@@ -325,7 +351,7 @@ package {{ .Package }}
 
 {{ define "object/struct" }}
 {{- $objectName := .Name -}}
-{{ comment .Comment .Name }}
+{{ comment .Comment $ }}
 type {{ $objectName }} struct {
   mu sync.RWMutex
 {{- range $i, $field := .Fields }}
