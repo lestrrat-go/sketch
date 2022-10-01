@@ -76,8 +76,6 @@ func _main() error {
   {{ $varname }} := &src.{{ $schema.Name }}{
     Base: schema.Base{
       Variables: map[string]interface{}{
-        "DefaultGenerateBuilders": {{ $.GenerateBuilders }},
-        "DefaultGenerateHasMethods": {{ $.GenerateHasMethods }},
         "DefaultPkg": defaultPkg,
         "DefaultGenerateMethod": func(s string) bool {
 {{ if $.ExcludeMethods }}

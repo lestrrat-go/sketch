@@ -146,6 +146,27 @@ directory.
 
 # Generated Code
 
+`sketch` allows users to exclude generation of specific parts.
+You can use the internal names (show below) to specify that certain exclude parts should not be generated via `--exclude`.
+
+| Method/Struct | Internal Name | Description |
+|---------------|---------------|-------------|
+| Main Object   | N/A           | The main struct defnition. Will have the name provided by your schema |
+| `(Object).Set`| `object.method.Set`  | Method to set the value of an arbitrary field by its JSON field name |
+| `(Object).Get`| `object.method.Get`  | Method to retrieve the value of an arbitrary field by its JSON field name |
+| `(Object).Has` | `object.method.Has` | Method to query the presence of a value of an arbitrary field by its JSON field name |
+| `(Object).HasXXXXX` | `object.method.HasXXXXX` | Method to query the presence of a value of field `XXXXX` |
+| `(Object).XXXXX` | `object.method.XXXXX` | Method to retrieve the value of field `XXXXX` |
+| `(Object).Remove | `object.method.Remove` | Method to remove the value of an arbitrary field by its JSON field name |
+| `(Object).Keys` | `object.method.Keys` | Method to retrieve the JSON key names that are present in the object |
+| `(Object).MarshalJSON` | `object.method.MarshalJSON` | Method to serialize the object into JSON |
+| `(Object).UnmarshalJSON` | `object.method.UnmarshalJSON` | Method to deserialize the object from JSON |
+| `(Object).Clone` | `object.method.Clone` | Method to clone an object |
+| Builder Object | `builder.struct` | The builder struct definition. Will have the name of your object plus "Builder" |
+| `(Builder).XXXXX` | `builder.method.XXXX` | Method to initialize the value of field `XXXXX` via the Builder |
+| `(Builder).Build` | `builder.method.Build` | Method to build and return the object from the Builder |
+| `(Builder).MustBuild` | `builder.method.MustBuild` | Method to build and return the object from the Builder |
+
 ## Optional Components
 
 ### Builder
@@ -301,7 +322,7 @@ The following is the list of template block names that you may provide.
 | Name | Description |
 |------|-------------|
 | --dst-dir=DIR | Specify the directory to write the generate files to |
-| --exclude-method=PATTERN | Specify a pattern to exclude. value may be a RE2 compatible regular expression. method names are prefixed with with a "group" name that it belongs to. May be specified multiple times |
+| --exclude=PATTERN | Specify a pattern to exclude. value may be a RE2 compatible regular expression. May be specified multiple times |
 | --tmpl-dir=DIR | Specify a template directory provided by the user. May be specified multiple times |
 | --var=NAME=VALUE / --var=NAME=VALUE:TYPE | Specify a variable to be passed to the template as key/value pair. May optionally be followed by a type name: e.g. --var=foo=true:bool would store the value for `foo` as a Go bool instead of a string. Currently only supports `string`, `bool`, and `int` |
 | --verbose | Enable verbose logging |

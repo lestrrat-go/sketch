@@ -87,16 +87,8 @@ func (app *App) Run(args []string) error {
 				Usage: "path to the sketch source code (default: current dir)",
 			},
 			&cli.BoolFlag{
-				Name:  "with-builders",
-				Usage: "enable generating Builders for each object",
-			},
-			&cli.BoolFlag{
 				Name:  "with-key-name-prefix",
 				Usage: "prepend object names in key name constant variables",
-			},
-			&cli.BoolFlag{
-				Name:  "with-has-methods",
-				Usage: "enable generating HasXXXX methods for each attribute",
 			},
 			&cli.StringFlag{
 				Name:    `dst-dir`,
@@ -264,8 +256,6 @@ func (app *App) RunMain(c *cli.Context) error {
 		srcModuleVersion = majorV + ".0.0"
 	}
 
-	variables[`GenerateBuilders`] = c.Bool(`with-builders`)
-	variables[`GenerateHasMethods`] = c.Bool(`with-has-methods`)
 	variables[`SrcModule`] = srcModule
 	variables[`SrcModulePath`] = moduleDir
 	variables[`SrcModuleVersion`] = srcModuleVersion

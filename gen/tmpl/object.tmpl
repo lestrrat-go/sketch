@@ -44,6 +44,7 @@ const (
 {{- end }}
 )
 
+{{ if .GenerateMethod "object.method.Get" -}}
 // Get retrieves the value associated with a key
 func (v *{{ $objectName }}) Get(key string, dst interface{}) error {
   v.mu.RLock()
@@ -69,8 +70,9 @@ func (v *{{ $objectName }}) Get(key string, dst interface{}) error {
   }
   return fmt.Errorf(`no such key %q`, key)
 }
+{{- end }}
 
-{{- if .GenerateMethod "object.Set" }}
+{{- if .GenerateMethod "object.method.Set" }}
 // Set sets the value of the specified field. The name must be a JSON
 // field name, not the Go name
 func (v *{{ $objectName }}) Set(key string, value interface{}) error {
@@ -116,9 +118,7 @@ func (v *{{ $objectName }}) Set(key string, value interface{}) error {
 }
 {{ end }}
 
-{{- if .GenerateHasMethods }}
-
-{{- if .GenerateMethod "object.Has" }}
+{{- if .GenerateMethod "object.method.Has" }}
 // Has returns true if the field specified by the argument has been populated.
 // The field name must be the JSON field name, not the Go-structure's field name.
 func (v *{{ $objectName }}) Has(name string) bool {
@@ -137,23 +137,44 @@ func (v *{{ $objectName }}) Has(name string) bool {
     return false
   }
 }
-{{ end }}
+{{- /* end "object.method.Has" */ -}}{{ end }}
+
+{{- if $.GenerateMethod "object.method.Keys" }}
+// Keys returns a slice of string comprising of JSON field names whose values
+// are present in the object. 
+func (v *{{ $objectName }}) Keys() []string {
+  keys := make([]string, 0, {{ (len .Fields) }})
+{{- range $i, $field := .Fields }}
+{{- if $field.GetIsExtension }}{{ continue }}{{ end }}
+  if v.{{ $field.GetUnexportedName }} != nil {
+    keys = append(keys, {{ $field.GetKeyName $ }})
+  }
+{{- /* end range */ -}}{{- end }}
+
+  if len(v.extra) > 0 {
+    for k := range v.extra {
+      keys = append(keys, k)
+    }
+  }
+  sort.Strings(keys)
+  return keys
+}
+{{- /* end "object.method.Keys" */ -}}{{ end }}
 
 {{- range $i, $field := .Fields }}
 {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
-{{- if $.GenerateMethod ($field.GetName | printf "object.Has%s") }}
+{{- if $.GenerateMethod ($field.GetName | printf "object.method.Has%s") }}
 // Has{{ $field.GetName }} returns true if the field `{{ $field.GetJSON }}` has been populated
 func (v *{{ $objectName }}) Has{{ $field.GetName }}() bool {
   v.mu.RLock()
   defer v.mu.RUnlock()
   return v.{{ $field.GetUnexportedName }} != nil
 }
-
-{{ end }}{{- /* .GenerateMethod */ -}}
-{{- end }}
-{{- end }}
+{{- /* end object.method.Has% */ -}}{{ end }}
+{{- /* end range */ -}}{{ end }}
 
 {{- range $i, $field := .Fields }}
+{{ if $.GenerateMethod ($field.GetName | printf "object.method.%s") }}
 {{- $type := $field.GetType }}
 {{- $rawType := $type.GetName }}
 {{- $indirectType := $type.GetIndirectType }}
@@ -167,9 +188,10 @@ func (v *{{ $objectName }}) {{ $field.GetName }}() {{ $type.GetApparentType }} {
   }
   return {{ $type.GetZeroVal }}
 }
-{{ end }}
+{{- /* end "object.method.%s" */ -}}{{ end }}
+{{- /* end range */ -}}{{ end }}
 
-{{- if .GenerateMethod "object.Remove" }}
+{{- if .GenerateMethod "object.method.Remove" }}
 // Remove removes the value associated with a key
 func (v *{{ $objectName }}) Remove(key string) error {
   v.mu.Lock()
@@ -211,7 +233,7 @@ func (v *{{ $objectName }}) makePairs() []*fieldPair {
   return pairs
 }
 
-{{ if .GenerateMethod "object.Clone" -}}
+{{ if .GenerateMethod "object.method.Clone" -}}
 func (v *{{ $objectName }}) Clone() ({{ .CloneResultType }}, error) {
   v.mu.RLock()
   defer v.mu.RUnlock()
@@ -223,7 +245,7 @@ func (v *{{ $objectName }}) Clone() ({{ .CloneResultType }}, error) {
 }
 {{ end }}
 
-{{ if .GenerateMethod "object.MarshalJSON" -}}
+{{ if .GenerateMethod "object.method.MarshalJSON" -}}
 // MarshalJSON serializes {{ $objectName }} into JSON.
 // All pre-declared fields are included as long as a value is
 // assigned to them, as well as all extra fields. All of these
@@ -324,9 +346,7 @@ LOOP:
 }
 {{ end -}}
 
-{{- if .GenerateBuilders }}
-  {{- runTemplate "object/builder" $ }}
-{{- end }}
+{{- runTemplate "object/builder" $ }}
 
 {{ runTemplate "object/footer" $ }}
 {{- end }}

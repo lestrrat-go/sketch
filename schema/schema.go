@@ -83,24 +83,6 @@ func (b Base) BoolVar(name string) bool {
 	return false
 }
 
-// GenerateHasMethods should return true if sketch should generate
-// HasXXXX methods for each field. The global default shall be
-// populated according to the values given as command line parameters,
-// but users may configure this on a per-object basis by providing
-// their own `GenerateHasMethods` method.
-func (b Base) GenerateHasMethods() bool {
-	return b.BoolVar(`DefaultGenerateHasMethods`)
-}
-
-// GenerateBuilders should return true if sketch should generate
-// the builder object for the generated object. The global default shall be
-// populated according to the values given as command line parameters,
-// but users may configure this on a per-object basis by providing
-// their own `GenerateBuilders` method.
-func (b Base) GenerateBuilders() bool {
-	return b.BoolVar(`DefaultGenerateBuilders`)
-}
-
 // GenerateMethod should return true if the given method is allowed to be
 // generated. The argument consists of a prefix (e.g. "object." or "builder.")
 // followed by the actual method name.
