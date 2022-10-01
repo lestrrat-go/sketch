@@ -41,6 +41,16 @@ const (
 func (v *{{ $objectName }}) Get(key string, dst interface{}) error {
   v.mu.RLock()
   defer v.mu.RUnlock()
+  return v.getNoLock(key, dst, false)
+}
+{{- /* end .GenerateMethod "object.method.Get" */ -}}{{ end }}
+
+{{ if .GenerateMethod "object.method.getNoLock" -}}
+// getNoLock is a utility method that is called from Get, MarshalJSON, etc, but
+// it can be used from user-supplied code. Unlike Get, it avoids locking for
+// each call, so the user needs to explicitly lock the object before using,
+// but otherwise should be faster than sing Get directly
+func (v *{{ $objectName }}) getNoLock(key string, dst interface{}, raw bool) error {
   switch key {
 {{- range $i, $field := .Fields }}
 {{- $type := $field.GetType }}
@@ -49,7 +59,14 @@ func (v *{{ $objectName }}) Get(key string, dst interface{}) error {
   {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
   case {{ $field.GetKeyName $ }}:
     if val := v.{{ $field.GetUnexportedName }}; val != nil {
-      return blackmagic.AssignIfCompatible(dst, {{ if $type.GetImplementsGet }}val.Get(){{ else if (ne $rawType $indirectType) }}*val{{ else }}val{{ end }})
+    {{- if $type.GetImplementsGet }}
+      if raw {
+        return blackmagic.AssignIfCompatible(dst, {{ if (ne $rawType $indirectType) }}*val{{ else }}val{{ end }})
+      }
+      return blackmagic.AssignIfCompatible(dst, val.Get())
+    {{- else }}
+      return blackmagic.AssignIfCompatible(dst, {{ if (ne $rawType $indirectType) }}*val{{ else }}val{{ end }})
+    {{- end }}
     }
 {{- end }}
   default:
@@ -203,28 +220,6 @@ func (v *{{ $objectName }}) Remove(key string) error {
 }
 {{- end }}
 
-func (v *{{ $objectName }}) makePairs() []*fieldPair {
-  pairs := make([]*fieldPair, 0, {{ len .Fields }})
-{{- range $i, $field := .Fields }}
-{{- $type := $field.GetType }}
-{{- $rawType := $type.GetName }}
-{{- $indirectType := $type.GetIndirectType }}
-  {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
-  if val := v.{{ $field.GetUnexportedName }}; {{ if $type.GetSupportsLen }}len(val) > 0 {{ else }}val != nil{{ end }} {
-    pairs = append(pairs, &fieldPair{Name: {{ $field.GetKeyName $ }}, Value: {{ if $type.GetImplementsGet }}val.Get(){{ else if (ne $rawType $indirectType) }}*val{{ else }}val{{ end }}})
-  }
-{{- end }}
-
-  for key, val := range v.extra {
-    pairs = append(pairs, &fieldPair{Name: key, Value: val})
-  }
-
-  sort.Slice(pairs, func(i, j int) bool {
-    return pairs[i].Name < pairs[j].Name
-  })
-  return pairs
-}
-
 {{ if .GenerateMethod "object.method.Clone" -}}
 func (v *{{ $objectName }}) Clone() ({{ .CloneResultType }}, error) {
   v.mu.RLock()
@@ -243,21 +238,27 @@ func (v *{{ $objectName }}) Clone() ({{ .CloneResultType }}, error) {
 // assigned to them, as well as all extra fields. All of these
 // fields are sorted in alphabetical order.
 func (v *{{ $objectName }}) MarshalJSON() ([]byte, error) {
-  pairs := v.makePairs()
+  v.mu.RLock()
+  defer v.mu.RUnlock()
 
   var buf bytes.Buffer
   enc := json.NewEncoder(&buf)
   buf.WriteByte('{')
-  for i, pair := range pairs {
+  for i, k := range v.Keys() {
+    var val interface{}
+    if err := v.getNoLock(k, &val, true); err != nil {
+      return nil, fmt.Errorf(`failed to retrieve value for field %q: %w`, k, err)
+    }
+
     if i > 0 {
       buf.WriteByte(',')
     }
-    if err := enc.Encode(pair.Name); err != nil {
+    if err := enc.Encode(k); err != nil {
       return nil, fmt.Errorf(`failed to encode map key name: %w`, err)
     }
     buf.WriteByte(':')
-    if err := enc.Encode(pair.Value); err != nil {
-      return nil, fmt.Errorf(`failed to encode map value for %q: %w`, pair.Name, err)
+    if err := enc.Encode(val); err != nil {
+      return nil, fmt.Errorf(`failed to encode map value for %q: %w`, k, err)
     }
   }
   buf.WriteByte('}')
