@@ -117,11 +117,11 @@ func (Thing) Name() string {
 
 Finally, you ou will want to declare the list of fields in this object.
 This is done by declaring a method named `Fields()` on the schema object,
-which returns a list of `schema.Field` objects.
+which returns a list of `schema.FieldSpec` objects.
 
 ```go
-func (Thing) Fields() []schema.Field{
-  return []schema.Field{
+func (Thing) Fields() []schema.FieldSpec {
+  return []schema.FieldSpec{
     schema.String("Foo").
       JSON("foo-field"),
   }
@@ -276,6 +276,56 @@ The following is the list of template block names that you may provide.
 | ext/object/header | User specified template to insert code at the beginning of the object.go code |
 | ext/object/footer | User specified template to insert code at the end of the object.go code |
 
+# Tips and Tricks
+
+## Managing JSON and Go Representations
+
+You may find yourself in a situation where the JSON representation of a vield and the Go representation
+do not quite line up. For example, the JSON representation may be using an epoch time (i.e. `int`), 
+but you want your Go consumers to work with `time.Time` objects.
+
+In such cases, consider creating a type definition that implements the `GetValue` and `AcceptValue` methods:
+
+```go
+type EpochTime struct {
+  time.Time
+}
+
+func (t *EpochTime) AcceptValue(v interface{}) error {
+  // Note: in reality you may have to work with float32, json.Number, etc
+  // this code assumes that json.Unmarshal(...) of the piece of data
+  // results in an `int`
+  switch v := v.(type) {
+  case int:
+    t.Time = time.Unix(v, 0)
+  default:
+    return fmt.Errorf(`expected int (got %T)`, v)
+  }
+}
+
+func (t *EpochTime) GetValue() interface{} {
+  // Note: in reality you may have to handle cases where t == nil
+  return t.Time
+}
+```
+
+Then use this time as your field type:
+
+```go
+func (Schema) Fields() []*schema.FieldSpec {
+  // Note: if you can import the type in the schema file, then
+  // AcceptValue/GetValue will be computed automatically.
+  // i.e. schema.Type(EpochTime{})
+  epochtype := schema.TypeName(`EpochTime`).
+    AcceptValue(true).
+    GetValue(true))
+  return []*schema.FieldSpec{
+    schema.NewField(`epoch`, epochtype),
+    ...
+  }
+}
+```
+
 # Command Line
 
 | Name | Description |
@@ -285,4 +335,3 @@ The following is the list of template block names that you may provide.
 | --tmpl-dir=DIR | Specify a template directory provided by the user. May be specified multiple times |
 | --var=NAME=VALUE / --var=NAME=VALUE:TYPE | Specify a variable to be passed to the template as key/value pair. May optionally be followed by a type name: e.g. --var=foo=true:bool would store the value for `foo` as a Go bool instead of a string. Currently only supports `string`, `bool`, and `int` |
 | --verbose | Enable verbose logging |
-

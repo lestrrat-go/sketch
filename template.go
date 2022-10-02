@@ -101,8 +101,8 @@ func (tmpl *Template) runTemplate(tt **template.Template) func(string, interface
 	}
 }
 
-func (tmpl *Template) fieldByName(**template.Template) func(schema.Interface, string) *schema.Field {
-	return func(s schema.Interface, name string) *schema.Field {
+func (tmpl *Template) fieldByName(**template.Template) func(schema.Interface, string) *schema.FieldSpec {
+	return func(s schema.Interface, name string) *schema.FieldSpec {
 		for _, f := range s.Fields() {
 			if f.GetName() == name {
 				return f

@@ -10,7 +10,7 @@ import (
 )
 
 // InitializerArgumentStyle is used when you would like to override
-// the default behavior and specify that a pseudo-TypeInfo (those types
+// the default behavior and specify that a pseudo-TypeSpec (those types
 // that are not constructed from actual Go objects)'s Builder methods
 // should take a variadic form vs singular form.
 type InitializerArgumentStyle int
@@ -20,6 +20,11 @@ const (
 	InitializerArgumentAsSlice
 )
 
+const (
+	defaultGetValueMethodName    = `GetValue`
+	defaultAcceptValueMethodName = `AcceptValue`
+)
+
 // Interface exists to provide an abstraction for multiple
 // schema objects that embed schema.Base object in the
 // intermediate program that sketch produces. Users of sketch
@@ -27,7 +32,7 @@ const (
 type Interface interface {
 	Name() string
 	Package() string
-	Fields() []*Field
+	Fields() []*FieldSpec
 	Comment() string
 	KeyNamePrefix() string
 }
@@ -168,10 +173,18 @@ func (b Base) Package() string {
 	return b.StringVar(`DefaultPkg`)
 }
 
+// FilenameBase is used to generate the filename when generating files.
+// Normally the name snake-cased version of the schema object (NOT the
+// return value of `Name` method call) is used, but when you provide
+// a value for thie method, the value is used verbatim
+func (b Base) FilenameBase() string {
+	return ""
+}
+
 // Fields returns the list of fields that should be associated with the
 // schema object. User usually must
-func (Base) Fields() []*Field {
-	return []*Field(nil)
+func (Base) Fields() []*FieldSpec {
+	return []*FieldSpec(nil)
 }
 
 // Imports returns the list of packges to be imported.
@@ -200,7 +213,7 @@ func (b Base) KeyNamePrefix() string {
 	return b.StringVar(`DefaultKeyNamePrefix`)
 }
 
-// TypeInfo is used to store information about a type, and contains
+// TypeSpec is used to store information about a type, and contains
 // various pieces of hints to generate objects/builders.
 //
 // One important concept that you need to be aware of is that of
@@ -214,19 +227,19 @@ func (b Base) KeyNamePrefix() string {
 // like a custom `StringList` that you created. In this case
 // `[]string` is the apparent type, and `StringList` is the storage type.
 //
-// The `TypeInfo` object is meant to store the storage type, but
+// The `TypeSpec` object is meant to store the storage type, but
 // you can associate the corresponding apparent type via the
 // `ApparentType` method.
-type TypeInfo struct {
-	name             string
-	element          string
-	apparentType     string
-	implementsGet    bool
-	implementsAccept bool
-	indirectType     string
-	initArgStyle     InitializerArgumentStyle
-	supportsLen      bool
-	zeroVal          string
+type TypeSpec struct {
+	name                  string
+	element               string
+	apparentType          string
+	acceptValueMethodName string
+	getValueMethodName    string
+	indirectType          string
+	initArgStyle          InitializerArgumentStyle
+	supportsLen           bool
+	zeroVal               string
 }
 
 func typeName(rv reflect.Type) string {
@@ -250,10 +263,10 @@ func typeName(rv reflect.Type) string {
 var typInterface = reflect.TypeOf((*interface{})(nil)).Elem()
 var typError = reflect.TypeOf((*error)(nil)).Elem()
 
-// TypeInfoFrom creates a new TypeInfo from a piece of Go data
+// Type creates a new TypeSpec from a piece of Go data
 // using reflection. It populates all the required fields by
 // inspecting the structure, which you can override later.
-func TypeInfoFrom(v interface{}) *TypeInfo {
+func Type(v interface{}) *TypeSpec {
 	rv := reflect.TypeOf(v)
 
 	typ := typeName(rv)
@@ -266,26 +279,22 @@ func TypeInfoFrom(v interface{}) *TypeInfo {
 		indirectType = `*` + typ
 	}
 
-	var implementsGet bool
-	if m, ok := rv.MethodByName(`Get`); ok {
-		implementsGet = m.Type.NumIn() == 1 && m.Type.NumOut() == 1
-	}
-
-	var implementsAccept bool
-	if m, ok := rv.MethodByName(`Accept`); ok {
-		implementsAccept =
-			m.Type.NumIn() == 2 &&
-				m.Type.In(1) == typInterface &&
-				m.Type.NumOut() == 1 &&
-				m.Type.Out(0) == typError
-	}
-
 	// If the type implements the Get() xxxx interface, we can deduce
 	// the apparent type from the return type
 	apparentType := rv
-	if implementsGet {
-		m, _ := rv.MethodByName(`Get`)
-		apparentType = m.Type.Out(0)
+	var getValueMethodName string
+	if m, ok := rv.MethodByName(defaultGetValueMethodName); ok {
+		if m.Type.NumIn() == 1 && m.Type.NumOut() == 1 {
+			apparentType = m.Type.Out(0)
+			getValueMethodName = defaultGetValueMethodName
+		}
+	}
+
+	var acceptValueMethodName string
+	if m, ok := rv.MethodByName(defaultAcceptValueMethodName); ok {
+		if m.Type.NumIn() == 2 && m.Type.In(1) == typInterface && m.Type.NumOut() == 1 && m.Type.Out(0) == typError {
+			acceptValueMethodName = defaultAcceptValueMethodName
+		}
 	}
 
 	var initArgStyle InitializerArgumentStyle
@@ -304,20 +313,20 @@ func TypeInfoFrom(v interface{}) *TypeInfo {
 		supportsLen = true
 	}
 
-	return &TypeInfo{
-		name:             typ,
-		apparentType:     typeName(apparentType),
-		element:          element,
-		implementsGet:    implementsGet,
-		implementsAccept: implementsAccept,
-		initArgStyle:     initArgStyle,
-		indirectType:     indirectType,
-		supportsLen:      supportsLen,
-		zeroVal:          fmt.Sprintf("%#v", reflect.Zero(rv)),
+	return &TypeSpec{
+		name:                  typ,
+		apparentType:          typeName(apparentType),
+		element:               element,
+		acceptValueMethodName: acceptValueMethodName,
+		getValueMethodName:    getValueMethodName,
+		initArgStyle:          initArgStyle,
+		indirectType:          indirectType,
+		supportsLen:           supportsLen,
+		zeroVal:               fmt.Sprintf("%#v", reflect.Zero(rv)),
 	}
 }
 
-// Type creates a TypeInfo from a string name.
+// TypeName creates a TypeSpec from a string name.
 //
 // If you are allowed to include the struct into the schema code, you
 // should not be using this function. Only use this function when
@@ -325,7 +334,7 @@ func TypeInfoFrom(v interface{}) *TypeInfo {
 // using sketch, or for objects that you cannot import because of
 // cyclic dependency, etc.
 //
-// Unlike `TypeInfoFrom`, this constructor only takes the name of the
+// Unlike `Type`, this constructor only takes the name of the
 // type and otherwise has no other information. Therefore it assumes
 // many things, and you will have to set many parameers manually.
 //
@@ -333,7 +342,7 @@ func TypeInfoFrom(v interface{}) *TypeInfo {
 //
 // If the name starts with a `[]`, then `IsSlice()` is automatically set to true
 // If the name starts with a `map[`, then `IsMap()` is automatically set to true
-func Type(name string) *TypeInfo {
+func TypeName(name string) *TypeSpec {
 	isSlice := strings.HasPrefix(name, `[]`)
 	isMap := strings.HasPrefix(name, `map[`)
 	element := "sketch.UnknownType" // so it's easier to see
@@ -355,7 +364,7 @@ func Type(name string) *TypeInfo {
 		indirectType = `*` + name
 	}
 
-	return &TypeInfo{
+	return &TypeSpec{
 		name:         name,
 		element:      element,
 		indirectType: indirectType,
@@ -365,69 +374,124 @@ func Type(name string) *TypeInfo {
 	}
 }
 
-func (ti *TypeInfo) InitializerArgumentStyle(ias InitializerArgumentStyle) *TypeInfo {
-	ti.initArgStyle = ias
-	return ti
+func (ts *TypeSpec) InitializerArgumentStyle(ias InitializerArgumentStyle) *TypeSpec {
+	ts.initArgStyle = ias
+	return ts
 }
 
-func (ti *TypeInfo) ZeroVal(s string) *TypeInfo {
-	ti.zeroVal = s
-	return ti
+func (ts *TypeSpec) ZeroVal(s string) *TypeSpec {
+	ts.zeroVal = s
+	return ts
 }
 
-func (ti *TypeInfo) ImplementsGet(b bool) *TypeInfo {
-	ti.implementsGet = b
-	return ti
+// GetValue specifies that this type implements the `GetValue` method.
+// The `GetValue` method must return a single element, which represents
+// the apparent (user-facing) type of the field.
+//
+// For example, if you are storing `time.Time` as `mypkg.EpochTime`,
+// and you want users to get `time.Time` values from the accessor
+// (instead of `mypkg.EpochTime`), you will want to implement a
+// `GetValue() time.Time` method, and make sure that the TypeSpec
+// recognizes its existance.
+//
+// By default the method name for this method is `GetValue`, but
+// you will be able to change it by setting a value with the `GetValueMethodName`.
+// Calling `GetValue(true)` is equivalent to `GetValueMethodName("GetValue")`
+func (ts *TypeSpec) GetValue(b bool) *TypeSpec {
+	if b {
+		ts.GetValueMethodName(defaultGetValueMethodName)
+	} else {
+		ts.GetValueMethodName("")
+	}
+	return ts
 }
 
-func (ti *TypeInfo) ImplementsAccept(b bool) *TypeInfo {
-	ti.implementsAccept = b
-	return ti
+// GetValueMethodName sets the name of the method that fulfills the
+// `GetValue` semantics. Set to the empty string if you would like to
+// indicate that the type does not implement the `GetValue` interface.
+func (ts *TypeSpec) GetValueMethodName(s string) *TypeSpec {
+	ts.getValueMethodName = s
+	return ts
 }
 
-func (ti *TypeInfo) ApparentType(s string) *TypeInfo {
-	ti.apparentType = s
-	return ti
+// AcceptValue specifies that this type implements the `AcceptValue` method.
+// The `AcceptValue` method must take a single `interface{}` argument, and
+// set the internal value from the given argument, which could be anything
+// that can either be accepted from JSON source, or from a user attempting
+// to set a value to a field of this type.
+//
+// For example, if you are storing `time.Time` as `mypkg.EpochTime`,
+// and you want users to set `time.Time` values via the Builder
+// (instead of `mypkg.EpochTime`), you will want to implement a
+// `AcceptValue(interface{}) error` method, and implement it such that
+// the value of given `interface{}` is properly set to the internal
+// representation of `mypkg.EpochTime`.
+//
+// Similarly, if this `mypkg.EpochTime` field is represented as an integer
+// in the JSON source, you might want to handle that as well.
+//
+// By default the method name for this method is `AcceptValue`, but
+// you will be able to change it by setting a value with the `AcceptValueMethodName`.
+// Calling `AcceptValue(true)` is equivalent to `AcceptValueMethodName("AcceptValue")`
+func (ts *TypeSpec) AcceptValue(b bool) *TypeSpec {
+	if b {
+		ts.AcceptValueMethodName(defaultAcceptValueMethodName)
+	} else {
+		ts.AcceptValueMethodName("")
+	}
+	return ts
 }
 
-func (ti *TypeInfo) GetName() string {
-	return ti.name
+// AcceptValueMethodName sets the name of the method that fulfills the
+// `AcceptValue` semantics. Set to the empty string if you would like to
+// indicate that the type does not implement the `AcceptValue` interface.
+func (ts *TypeSpec) AcceptValueMethodName(s string) *TypeSpec {
+	ts.acceptValueMethodName = s
+	return ts
 }
 
-// GetImplementsGet returns true if the object contains a method named `Get`
-// which returns a single return value. The return value is expected
-// to be the ApparentType
-func (ti *TypeInfo) GetImplementsGet() bool {
-	return ti.implementsGet
+func (ts *TypeSpec) ApparentType(s string) *TypeSpec {
+	ts.apparentType = s
+	return ts
 }
 
-func (ti *TypeInfo) GetImplementsAccept() bool {
-	return ti.implementsAccept
+func (ts *TypeSpec) GetName() string {
+	return ts.name
 }
 
-func (ti *TypeInfo) GetZeroVal() string {
-	return ti.zeroVal
+// GetGetValueMethodName returns the name of the `GetValue` method.
+func (ts *TypeSpec) GetGetValueMethodName() string {
+	return ts.getValueMethodName
 }
 
-func (ti *TypeInfo) GetApparentType() string {
-	typ := ti.apparentType
+// GetAcceptValueMethodName returns the name of the `AcceptValue` method.
+func (ts *TypeSpec) GetAcceptValueMethodName() string {
+	return ts.acceptValueMethodName
+}
+
+func (ts *TypeSpec) GetZeroVal() string {
+	return ts.zeroVal
+}
+
+func (ts *TypeSpec) GetApparentType() string {
+	typ := ts.apparentType
 	if typ == "" {
-		typ = ti.name
+		typ = ts.name
 	}
 	return typ
 }
 
-func (ti *TypeInfo) GetElement() string {
-	return ti.element
+func (ts *TypeSpec) GetElement() string {
+	return ts.element
 }
 
-func (ti *TypeInfo) GetSupportsLen() bool {
-	return ti.supportsLen
+func (ts *TypeSpec) GetSupportsLen() bool {
+	return ts.supportsLen
 }
 
-func (ti *TypeInfo) SupportsLen(b bool) *TypeInfo {
-	ti.supportsLen = b
-	return ti
+func (ts *TypeSpec) SupportsLen(b bool) *TypeSpec {
+	ts.supportsLen = b
+	return ts
 }
 
 // IndirectType specifies the "indirect" type of a field. The fields
@@ -438,24 +502,25 @@ func (ti *TypeInfo) SupportsLen(b bool) *TypeInfo {
 // you would like to store an interface, for example, you might
 // want to avoid prepending the `*` by explicitly specifying the
 // name of the indirect type.
-func (ti *TypeInfo) IndirectType(s string) *TypeInfo {
-	ti.indirectType = s
-	return ti
+func (ts *TypeSpec) IndirectType(s string) *TypeSpec {
+	ts.indirectType = s
+	return ts
 }
 
-func (ti *TypeInfo) Element(s string) *TypeInfo {
-	ti.element = s
-	return ti
+func (ts *TypeSpec) Element(s string) *TypeSpec {
+	ts.element = s
+	return ts
 }
 
-func (ti *TypeInfo) SliceStyleInitializerArgument() bool {
-	return ti.initArgStyle == InitializerArgumentAsSlice
+func (ts *TypeSpec) SliceStyleInitializerArgument() bool {
+	return ts.initArgStyle == InitializerArgumentAsSlice
 }
 
-type Field struct {
+// FieldSpec represents a field that belongs to a particular schema.
+type FieldSpec struct {
 	required       bool
 	name           string
-	typ            *TypeInfo
+	typ            *TypeSpec
 	typName        string
 	unexportedName string
 	json           string
@@ -465,54 +530,54 @@ type Field struct {
 	extension      bool
 }
 
-var typInfoType = reflect.TypeOf((*TypeInfo)(nil))
+var typInfoType = reflect.TypeOf((*TypeSpec)(nil))
 
-func NewField(name string, typ interface{}) *Field {
+func Field(name string, typ interface{}) *FieldSpec {
 	// name must be an exported type
 	if len(name) <= 0 || !unicode.IsUpper(rune(name[0])) {
 		panic(fmt.Sprintf("schema fields must be provided an exported name: (%q is invalid)", name))
 	}
 
-	f := &Field{name: name}
+	f := &FieldSpec{name: name}
 	if typ == nil {
-		panic("schema.NewField must receive a non-nil second parameter")
+		panic("schema.Field must receive a non-nil second parameter")
 	}
 
 	// typ can be either a real type, or an instance of sketch.CustomType
-	if ti, ok := typ.(*TypeInfo); ok {
+	if ti, ok := typ.(*TypeSpec); ok {
 		f.typ = ti
 	} else {
-		f.typ = TypeInfoFrom(typ)
+		f.typ = Type(typ)
 	}
 	return f
 }
 
-func (f *Field) Required(b bool) *Field {
+func (f *FieldSpec) Required(b bool) *FieldSpec {
 	f.required = b
 	return f
 }
 
-func (f *Field) GetRequired() bool {
+func (f *FieldSpec) GetRequired() bool {
 	return f.required
 }
 
-func String(name string) *Field {
-	return NewField(name, ``)
+func String(name string) *FieldSpec {
+	return Field(name, ``)
 }
 
-func Int(name string) *Field {
-	return NewField(name, int(0))
+func Int(name string) *FieldSpec {
+	return Field(name, int(0))
 }
 
-func Bool(name string) *Field {
-	return NewField(name, true)
+func Bool(name string) *FieldSpec {
+	return Field(name, true)
 }
 
-func (f *Field) GetName() string {
+func (f *FieldSpec) GetName() string {
 	return f.name
 }
 
-func (f *Field) GetType() *TypeInfo {
+func (f *FieldSpec) GetType() *TypeSpec {
 	return f.typ
 }
 
@@ -520,43 +585,43 @@ func (f *Field) GetType() *TypeInfo {
 // If unspecified, the name of the field is automatically
 // converted into a camel-case string with the first phrase
 // being lower cased
-func (f *Field) Unexported(s string) *Field {
+func (f *FieldSpec) Unexported(s string) *FieldSpec {
 	f.unexportedName = s
 	return f
 }
 
 // JSON specifies the JSON field name. If unspecified, the
 // unexported name is used.
-func (f *Field) JSON(s string) *Field {
+func (f *FieldSpec) JSON(s string) *FieldSpec {
 	f.json = s
 	return f
 }
 
-func (f *Field) GetUnexportedName() string {
+func (f *FieldSpec) GetUnexportedName() string {
 	if f.unexportedName == "" {
 		f.unexportedName = xstrings.Camel(f.name, xstrings.WithLowerCamel(true))
 	}
 	return f.unexportedName
 }
 
-func (f *Field) Comment(s string) *Field {
+func (f *FieldSpec) Comment(s string) *FieldSpec {
 	f.comment = s
 	return f
 }
 
-func (f *Field) GetComment() string {
+func (f *FieldSpec) GetComment() string {
 	return f.comment
 }
 
-func (f *Field) GetJSON() string {
+func (f *FieldSpec) GetJSON() string {
 	if f.json == "" {
 		f.json = f.GetUnexportedName()
 	}
 	return f.json
 }
 
-func (ti *TypeInfo) GetIndirectType() string {
-	return ti.indirectType
+func (ts *TypeSpec) GetIndirectType() string {
+	return ts.indirectType
 }
 
 // SExtension declares the field as an extension, and not part of the object
@@ -566,7 +631,7 @@ func (ti *TypeInfo) GetIndirectType() string {
 //
 // Fields defined as extensions are expected to be _internal_ to the object.
 // They are not exposed by either Get/Set, and do not get any sort of accessors.
-func (f *Field) IsExtension(b bool) *Field {
+func (f *FieldSpec) IsExtension(b bool) *FieldSpec {
 	f.extension = b
 	return f
 }
@@ -574,11 +639,11 @@ func (f *Field) IsExtension(b bool) *Field {
 // GetIsExtension returns true if this field is an extension, and not
 // part of the object per se. You will need to declare methods to
 // get/set and/or otherwise work this variable by yourself
-func (f *Field) GetIsExtension() bool {
+func (f *FieldSpec) GetIsExtension() bool {
 	return f.extension
 }
 
-func (f *Field) GetKeyName(object interface{ KeyNamePrefix() string }) string {
+func (f *FieldSpec) GetKeyName(object interface{ KeyNamePrefix() string }) string {
 	var b strings.Builder
 
 	// If the object wants per-object prefix, do it. Otherwise leave it empty

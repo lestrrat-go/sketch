@@ -47,6 +47,7 @@ func main() {
 
 type Src struct {
   Name string
+  FilenameBase string
   Schema schema.Interface
 }
 
@@ -103,7 +104,8 @@ func _main() error {
   {{- end }}
   srcs[{{ $i }}] = Src{
     Schema: {{ $varname }},
-    Name: {{ $schema.Name | printf "%q" }}, {{- /* This is deliberately set toe $schema.Name */ -}}
+    FilenameBase: {{ $varname }}.FilenameBase(),
+    Name: {{ $schema.Name | printf "%q" }}, {{- /* This is deliberately set to $schema.Name */ -}}
   }
 {{- end }}
 
@@ -142,7 +144,11 @@ func _main() error {
         // we prepend the name of this object to the remaining `name`, EXCEPT
         // when the name is `object.go`, which is special.
         if name == `object.go` {
-          name = xstrings.Snake(src.Name) + `.go`
+	  base := src.FilenameBase
+	  if base == "" {
+	    base = xstrings.Snake(src.Name) 
+	  }
+          name = base + `.go`
         } else {
 	  // default case would be prepend the object name
 	  // so foo/bar/baz.go would be rendered as foo/bar/object_name_baz.go (and then changed to xxx_gen.go)

@@ -59,11 +59,12 @@ func (v *{{ $objectName }}) getNoLock(key string, dst interface{}, raw bool) err
   {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
   case {{ $field.GetKeyName $ }}:
     if val := v.{{ $field.GetUnexportedName }}; val != nil {
-    {{- if $type.GetImplementsGet }}
+    {{- $getValueMethod := $type.GetGetValueMethodName }}
+    {{- if $getValueMethod }}
       if raw {
         return blackmagic.AssignIfCompatible(dst, {{ if (ne $rawType $indirectType) }}*val{{ else }}val{{ end }})
       }
-      return blackmagic.AssignIfCompatible(dst, val.Get())
+      return blackmagic.AssignIfCompatible(dst, val.{{ $getValueMethod }}())
     {{- else }}
       return blackmagic.AssignIfCompatible(dst, {{ if (ne $rawType $indirectType) }}*val{{ else }}val{{ end }})
     {{- end }}
@@ -94,9 +95,10 @@ func (v *{{ $objectName }}) Set(key string, value interface{}) error {
 {{- $indirectType := $type.GetIndirectType }}
   {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
   case {{ $field.GetKeyName $ }}:
-  {{- if $type.GetImplementsAccept }}
+  {{- $acceptValueMethod := $type.GetAcceptValueMethodName }}
+  {{- if $acceptValueMethod }}
     var object {{ $rawType }}
-    if err := object.Accept(value); err != nil {
+    if err := object.{{ $acceptValueMethod }}(value); err != nil {
       return fmt.Errorf(`failed to accept value: %w`, err)
     }
     {{- if (eq $rawType $indirectType) }}
@@ -193,7 +195,8 @@ func (v *{{ $objectName }}) {{ $field.GetName }}() {{ $type.GetApparentType }} {
   v.mu.RLock()
   defer v.mu.RUnlock()
   if val := v.{{ $field.GetUnexportedName }}; val != nil {
-    return {{ if $type.GetImplementsGet }}val.Get(){{ else if (ne $rawType $indirectType) }}*val{{ else }}val{{ end }}
+    {{- $getValueMethod := $type.GetGetValueMethodName }}
+    return {{ if $getValueMethod }}val.{{ $getValueMethod }}(){{ else if (ne $rawType $indirectType) }}*val{{ else }}val{{ end }}
   }
   return {{ $type.GetZeroVal }}
 }

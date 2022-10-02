@@ -26,7 +26,8 @@ import (
 var embedded embed.FS
 
 type App struct {
-	verbose bool
+	excludedSchemaRegexps []*regexp.Regexp
+	verbose               bool
 }
 
 func (app *App) Infof(f string, args ...interface{}) {
@@ -101,6 +102,10 @@ func (app *App) Run(args []string) error {
 				Usage:   "user-supplied extra templates",
 			},
 			&cli.StringSliceFlag{
+				Name:  "exclude-schema",
+				Usage: "Regular expression to match against schema names. If they match the schema will not be processed.",
+			},
+			&cli.StringSliceFlag{
 				Name:  "exclude",
 				Usage: "Regular expression to match against method names. If they match the method will not be generated. If schemas define their own GenerateMethod, these patterns will be ignored",
 			},
@@ -161,6 +166,17 @@ func (app *App) RunMain(c *cli.Context) error {
 
 	if patterns := c.StringSlice(`exclude`); len(patterns) > 0 {
 		variables["Excludes"] = patterns
+	}
+
+	if patterns := c.StringSlice(`exclude-schema`); len(patterns) > 0 {
+		app.excludedSchemaRegexps = make([]*regexp.Regexp, len(patterns))
+		for i, pattern := range patterns {
+			rx, err := regexp.Compile(pattern)
+			if err != nil {
+				return fmt.Errorf(`failed to compile pattern %q for exclude-schema: %w`, pattern, err)
+			}
+			app.excludedSchemaRegexps[i] = rx
+		}
 	}
 
 	srcDir := c.Args().Get(0)
@@ -287,6 +303,10 @@ func (app *App) RunMain(c *cli.Context) error {
 		return err
 	}
 
+	if len(schemas) == 0 {
+		return fmt.Errorf(`could not find any suitable objects to generate code for`)
+	}
+
 	// Using these schemas, we dynamically generate some source code
 	// that can generate the code for the client
 	if err := app.genCompiler(&ctx, schemas); err != nil {
@@ -331,9 +351,11 @@ func (app *App) extractStructs(ctx *genCtx) ([]*DeclaredSchema, error) {
 							switch specType := spec.Type.(type) {
 							case *ast.StructType:
 								if app.looksLikeSchema(schemaPkg, specType) {
-									schemas = append(schemas, &DeclaredSchema{
-										Name: structName,
-									})
+									if app.isSchemaAllowed(structName) {
+										schemas = append(schemas, &DeclaredSchema{
+											Name: structName,
+										})
+									}
 								}
 							}
 						}
@@ -343,6 +365,15 @@ func (app *App) extractStructs(ctx *genCtx) ([]*DeclaredSchema, error) {
 		}
 	}
 	return schemas, nil
+}
+
+func (app *App) isSchemaAllowed(name string) bool {
+	for _, rx := range app.excludedSchemaRegexps {
+		if rx.MatchString(name) {
+			return false
+		}
+	}
+	return true
 }
 
 func (app *App) looksLikeSchema(schemaPkg string, specType *ast.StructType) bool {

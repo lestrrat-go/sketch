@@ -14,7 +14,7 @@ type StringList struct {
 	storage []string
 }
 
-func (sl *StringList) Accept(v interface{}) error {
+func (sl *StringList) AcceptValue(v interface{}) error {
 	sl.mu.Lock()
 	defer sl.mu.Unlock()
 
@@ -23,12 +23,12 @@ func (sl *StringList) Accept(v interface{}) error {
 		sl.storage = make([]string, len(v))
 		copy(sl.storage, v)
 	default:
-		return fmt.Errorf(`invalid value passed to StringList.Accept (got %T, expected []string)`, v)
+		return fmt.Errorf(`invalid value passed to StringList.AcceptValue (got %T, expected []string)`, v)
 	}
 	return nil
 }
 
-func (sl *StringList) Get() []string {
+func (sl *StringList) GetValue() []string {
 	sl.mu.RLock()
 	defer sl.mu.RUnlock()
 
@@ -38,8 +38,8 @@ func (sl *StringList) Get() []string {
 }
 
 func TestType(t *testing.T) {
-	ti := schema.TypeInfoFrom(&StringList{})
-	require.True(t, ti.GetImplementsGet())
-	require.True(t, ti.GetImplementsAccept())
+	ti := schema.Type(&StringList{})
+	require.Equal(t, `GetValue`, ti.GetGetValueMethodName())
+	require.Equal(t, `AcceptValue`, ti.GetAcceptValueMethodName())
 	require.Equal(t, ti.GetApparentType(), `[]string`)
 }
