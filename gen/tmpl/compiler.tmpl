@@ -98,7 +98,6 @@ func _main() error {
   {{ $varname }}.Base.Variables["DefaultName"] = {{ $varname }}Name
   {{ $varname }}.Base.Variables["DefaultBuilderName"] = {{ $varname }}Name + "Builder"
   {{ $varname }}.Base.Variables["DefaultBuilderResultType"] = "*" + {{ $varname }}Name
-  {{ $varname }}.Base.Variables["DefaultCloneResultType"] = "*" + {{ $varname }}Name
   {{- if $.WithKeyNamePrefix }}
   {{ $varname }}.Base.Variables["DefaultKeyNamePrefix"] = {{ $varname }}Name
   {{- end }}

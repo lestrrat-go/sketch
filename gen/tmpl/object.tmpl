@@ -54,19 +54,20 @@ func (v *{{ $objectName }}) getNoLock(key string, dst interface{}, raw bool) err
   switch key {
 {{- range $i, $field := .Fields }}
 {{- $type := $field.GetType }}
-{{- $rawType := $type.GetName }}
-{{- $indirectType := $type.GetIndirectType }}
+{{- $rawType := $type.GetRawType }}
+{{- $ptrType := $type.GetPointerType }}
+{{- $apparentType := $type.GetApparentType }}
   {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
   case {{ $field.GetKeyName $ }}:
     if val := v.{{ $field.GetUnexportedName }}; val != nil {
     {{- $getValueMethod := $type.GetGetValueMethodName }}
     {{- if $getValueMethod }}
       if raw {
-        return blackmagic.AssignIfCompatible(dst, {{ if (ne $rawType $indirectType) }}*val{{ else }}val{{ end }})
+        return blackmagic.AssignIfCompatible(dst, {{ if (ne $rawType $ptrType) }}*val{{ else }}val{{ end }})
       }
       return blackmagic.AssignIfCompatible(dst, val.{{ $getValueMethod }}())
     {{- else }}
-      return blackmagic.AssignIfCompatible(dst, {{ if (ne $rawType $indirectType) }}*val{{ else }}val{{ end }})
+      return blackmagic.AssignIfCompatible(dst, {{ if (ne $apparentType $ptrType) }}*val{{ else }}val{{ end }})
     {{- end }}
     }
 {{- end }}
@@ -91,8 +92,8 @@ func (v *{{ $objectName }}) Set(key string, value interface{}) error {
   switch key {
 {{- range $i, $field := .Fields }}
 {{- $type := $field.GetType }}
-{{- $rawType := $type.GetName }}
-{{- $indirectType := $type.GetIndirectType }}
+{{- $rawType := $type.GetRawType }}
+{{- $ptrType := $type.GetPointerType }}
   {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
   case {{ $field.GetKeyName $ }}:
   {{- $acceptValueMethod := $type.GetAcceptValueMethodName }}
@@ -101,7 +102,7 @@ func (v *{{ $objectName }}) Set(key string, value interface{}) error {
     if err := object.{{ $acceptValueMethod }}(value); err != nil {
       return fmt.Errorf(`failed to accept value: %w`, err)
     }
-    {{- if (eq $rawType $indirectType) }}
+    {{- if (eq $rawType $ptrType) }}
     v.{{ $field.GetUnexportedName }} = object
     {{- else }}
     v.{{ $field.GetUnexportedName }} = &object
@@ -112,7 +113,7 @@ func (v *{{ $objectName }}) Set(key string, value interface{}) error {
       return fmt.Errorf(`expected value of type {{ $rawType }} for field {{ $field.GetJSON }}, got %T`, value)
     }
 
-    {{- if (eq $rawType $indirectType) }}
+    {{- if (eq $rawType $ptrType) }}
     v.{{ $field.GetUnexportedName }} = converted
     {{- else }}
     v.{{ $field.GetUnexportedName }} = &converted
@@ -187,8 +188,9 @@ func (v *{{ $objectName }}) Has{{ $field.GetName }}() bool {
 {{- range $i, $field := .Fields }}
 {{ if $.GenerateMethod ($field.GetName | printf "object.method.%s") }}
 {{- $type := $field.GetType }}
-{{- $rawType := $type.GetName }}
-{{- $indirectType := $type.GetIndirectType }}
+{{- $rawType := $type.GetRawType }}
+{{- $ptrType := $type.GetPointerType }}
+{{- $apparentType := $type.GetApparentType }}
 {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
 {{ comment $field.GetComment $field }}
 func (v *{{ $objectName }}) {{ $field.GetName }}() {{ $type.GetApparentType }} {
@@ -196,7 +198,7 @@ func (v *{{ $objectName }}) {{ $field.GetName }}() {{ $type.GetApparentType }} {
   defer v.mu.RUnlock()
   if val := v.{{ $field.GetUnexportedName }}; val != nil {
     {{- $getValueMethod := $type.GetGetValueMethodName }}
-    return {{ if $getValueMethod }}val.{{ $getValueMethod }}(){{ else if (ne $rawType $indirectType) }}*val{{ else }}val{{ end }}
+    return {{ if $getValueMethod }}val.{{ $getValueMethod }}(){{ else if (ne $apparentType $ptrType) }}*val{{ else }}val{{ end }}
   }
   return {{ $type.GetZeroVal }}
 }
@@ -224,14 +226,20 @@ func (v *{{ $objectName }}) Remove(key string) error {
 {{- end }}
 
 {{ if .GenerateMethod "object.method.Clone" -}}
-func (v *{{ $objectName }}) Clone() ({{ .CloneResultType }}, error) {
+func (v *{{ $objectName }}) Clone(dst interface{}) error {
   v.mu.RLock()
   defer v.mu.RUnlock()
-  return &{{ $objectName }}{
+
+  extra := make(map[string]interface{})
+  for key, val := range v.extra {
+    extra[key] = val
+  }
+  return blackmagic.AssignIfCompatible(dst,  &{{ $objectName }}{
 {{- range $i, $field := .Fields }}
     {{ $field.GetUnexportedName }}: v.{{ $field.GetUnexportedName }},
 {{- end }}
-  }, nil
+    extra: extra,
+  })
 }
 {{ end }}
 
@@ -318,14 +326,14 @@ LOOP:
 {{- range $i, $field := .Fields }}
 {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
 {{- $type := $field.GetType }}
-{{- $rawType := $type.GetName }}
-{{- $indirectType := $type.GetIndirectType }}
+{{- $rawType := $type.GetRawType }}
+{{- $ptrType := $type.GetPointerType }}
       case {{ $field.GetKeyName $ }}:
         var val {{ $rawType }}
         if err := dec.Decode(&val); err != nil {
           return fmt.Errorf(`failed to decode value for %q: %w`, {{ $field.GetKeyName $ }}, err)
         }
-  {{- if (eq $rawType $indirectType) }}
+  {{- if (eq $rawType $ptrType) }}
         v.{{ $field.GetUnexportedName }} = val
   {{- else }}
         v.{{ $field.GetUnexportedName }} = &val
@@ -380,7 +388,7 @@ package {{ .Package }}
 type {{ $objectName }} struct {
   mu sync.RWMutex
 {{- range $i, $field := .Fields }}
-  {{ $field.GetUnexportedName }} {{ $field.GetType.GetIndirectType }}
+  {{ $field.GetUnexportedName }} {{ $field.GetType.GetPointerType }}
 {{- end }}
   extra map[string]interface{}
 }

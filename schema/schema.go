@@ -155,13 +155,6 @@ func (b Base) BuilderResultType() string {
 	return b.StringVar(`DefaultBuilderResultType`)
 }
 
-// CloneResultType returns the name of the type that the `Clone` method
-// returns. Normally this is set to the pointer to the object, but
-// sometimes you may need to return an interface.
-func (b Base) CloneResultType() string {
-	return b.StringVar(`DefaultCloneResultType`)
-}
-
 // Package returns the name of the package that a schema belongs to.
 // By default this value is set to the last element of the destination
 // directory. For example, if you are generating files under `/home/lestrrat/foo`,
@@ -231,12 +224,13 @@ func (b Base) KeyNamePrefix() string {
 // you can associate the corresponding apparent type via the
 // `ApparentType` method.
 type TypeSpec struct {
-	name                  string
+	name                  string // The name that the user procided us with
 	element               string
-	apparentType          string
+	rawType               string // non-pointer type (could be the same as name)
+	ptrType               string // pointer type (could be the same as name)
+	apparentType          string // what the user sees
 	acceptValueMethodName string
 	getValueMethodName    string
-	indirectType          string
 	initArgStyle          InitializerArgumentStyle
 	supportsLen           bool
 	zeroVal               string
@@ -271,12 +265,18 @@ func Type(v interface{}) *TypeSpec {
 
 	typ := typeName(rv)
 
-	var indirectType string
+	var ptrType string
+	var rawType string
 	switch rv.Kind() {
-	case reflect.Ptr, reflect.Slice, reflect.Interface, reflect.Array:
-		indirectType = typ
+	case reflect.Ptr:
+		rawType = typeName(rv.Elem())
+		ptrType = typ
+	case reflect.Slice, reflect.Interface, reflect.Array:
+		rawType = typ
+		ptrType = typ
 	default:
-		indirectType = `*` + typ
+		rawType = typ
+		ptrType = `*` + typ
 	}
 
 	// If the type implements the Get() xxxx interface, we can deduce
@@ -316,11 +316,12 @@ func Type(v interface{}) *TypeSpec {
 	return &TypeSpec{
 		name:                  typ,
 		apparentType:          typeName(apparentType),
+		rawType:               rawType,
+		ptrType:               ptrType,
 		element:               element,
 		acceptValueMethodName: acceptValueMethodName,
 		getValueMethodName:    getValueMethodName,
 		initArgStyle:          initArgStyle,
-		indirectType:          indirectType,
 		supportsLen:           supportsLen,
 		zeroVal:               fmt.Sprintf("%#v", reflect.Zero(rv)),
 	}
@@ -357,17 +358,24 @@ func TypeName(name string) *TypeSpec {
 		supportsLen = true
 	}
 
-	var indirectType string
-	if strings.HasPrefix(name, `*`) || (isSlice || isMap) {
-		indirectType = name
+	var ptrType string
+	var rawType string
+	if strings.HasPrefix(name, `*`) {
+		rawType = strings.TrimPrefix(name, `*`)
+		ptrType = name
+	} else if isSlice || isMap {
+		rawType = name
+		ptrType = name
 	} else {
-		indirectType = `*` + name
+		rawType = name
+		ptrType = `*` + name
 	}
 
 	return &TypeSpec{
 		name:         name,
 		element:      element,
-		indirectType: indirectType,
+		ptrType:      ptrType,
+		rawType:      rawType,
 		initArgStyle: initArgStyle,
 		supportsLen:  supportsLen,
 		zeroVal:      `nil`,
@@ -494,7 +502,7 @@ func (ts *TypeSpec) SupportsLen(b bool) *TypeSpec {
 	return ts
 }
 
-// IndirectType specifies the "indirect" type of a field. The fields
+// PointerType specifies the "indirect" type of a field. The fields
 // are stored as _pointers_ to the actual type, so for most types
 // we simply prepend a `*` to the type. For example for a `string`
 // type, the indirect type would be `*string`, whereas for `*Foo`
@@ -502,8 +510,8 @@ func (ts *TypeSpec) SupportsLen(b bool) *TypeSpec {
 // you would like to store an interface, for example, you might
 // want to avoid prepending the `*` by explicitly specifying the
 // name of the indirect type.
-func (ts *TypeSpec) IndirectType(s string) *TypeSpec {
-	ts.indirectType = s
+func (ts *TypeSpec) PointerType(s string) *TypeSpec {
+	ts.ptrType = s
 	return ts
 }
 
@@ -524,8 +532,6 @@ type FieldSpec struct {
 	typName        string
 	unexportedName string
 	json           string
-	indirectType   string
-	apparentType   string
 	comment        string
 	extension      bool
 }
@@ -620,8 +626,12 @@ func (f *FieldSpec) GetJSON() string {
 	return f.json
 }
 
-func (ts *TypeSpec) GetIndirectType() string {
-	return ts.indirectType
+func (ts *TypeSpec) GetPointerType() string {
+	return ts.ptrType
+}
+
+func (ts *TypeSpec) GetRawType() string {
+	return ts.rawType
 }
 
 // SExtension declares the field as an extension, and not part of the object
