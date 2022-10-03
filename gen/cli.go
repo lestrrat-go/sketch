@@ -107,7 +107,7 @@ func (app *App) Run(args []string) error {
 			},
 			&cli.StringSliceFlag{
 				Name:  "exclude",
-				Usage: "Regular expression to match against method names. If they match the method will not be generated. If schemas define their own GenerateMethod, these patterns will be ignored",
+				Usage: "Regular expression to match against method names. If they match the method will not be generated. If schemas define their own GenerateSymbol, these patterns will be ignored",
 			},
 		},
 	}

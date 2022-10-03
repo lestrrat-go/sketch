@@ -60,7 +60,7 @@ func _main() error {
   defaultPkg := filepath.Base(outputDir)
   srcs := make([]Src, {{ (len .Schemas) }})
 
-  {{- /* Build the default rule set for .GenerateMethod */ -}}
+  {{- /* Build the default rule set for .GenerateSymbol */ -}}
 {{ if .Excludes }}
   excludes := make([]*regexp.Regexp, {{ (len .Excludes) }})
 {{- range $i, $pattern := .Excludes }}
@@ -78,7 +78,7 @@ func _main() error {
     Base: schema.Base{
       Variables: map[string]interface{}{
         "DefaultPkg": defaultPkg,
-        "DefaultGenerateMethod": func(s string) bool {
+        "DefaultGenerateSymbol": func(s string) bool {
 {{ if $.Excludes }}
           for _, rx := range excludes {
 	    if rx.MatchString(s) {

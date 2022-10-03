@@ -25,6 +25,15 @@ func defaultDecodeExtra(name string, dec *json.Decoder, dst interface{}) error {
 {{- runTemplate "object/struct" $ }}
 {{- $objectName := .Name -}}
 
+{{- $constCount := 0 -}}
+{{- range $i, $field := .Fields }}
+  {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
+  {{- if $.GenerateSymbol ($field.GetKeyName $ | printf "object.const.%s") }}
+  {{- $constCount = increment $constCount }}
+  {{- end -}}
+{{- end -}}
+
+{{- if (gt $constCount 0) }}
 // These constants are used when the JSON field name is used.
 // Their use is not strictly required, but certain linters
 // complain about repeated constants, and therefore internally
@@ -32,20 +41,23 @@ func defaultDecodeExtra(name string, dec *json.Decoder, dst interface{}) error {
 const (
 {{- range $i, $field := .Fields }}
   {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
+  {{- if $.GenerateSymbol ($field.GetKeyName $ | printf "object.const.%s") }}
   {{ $field.GetKeyName $ }} = {{ $field.GetJSON | printf "%q" }}
+  {{- end -}}
 {{- end }}
 )
+{{- end }}
 
-{{ if .GenerateMethod "object.method.Get" -}}
+{{ if .GenerateSymbol "object.method.Get" -}}
 // Get retrieves the value associated with a key
 func (v *{{ $objectName }}) Get(key string, dst interface{}) error {
   v.mu.RLock()
   defer v.mu.RUnlock()
   return v.getNoLock(key, dst, false)
 }
-{{- /* end .GenerateMethod "object.method.Get" */ -}}{{ end }}
+{{- /* end .GenerateSymbol "object.method.Get" */ -}}{{ end }}
 
-{{ if .GenerateMethod "object.method.getNoLock" -}}
+{{ if .GenerateSymbol "object.method.getNoLock" -}}
 // getNoLock is a utility method that is called from Get, MarshalJSON, etc, but
 // it can be used from user-supplied code. Unlike Get, it avoids locking for
 // each call, so the user needs to explicitly lock the object before using,
@@ -83,7 +95,7 @@ func (v *{{ $objectName }}) getNoLock(key string, dst interface{}, raw bool) err
 }
 {{- end }}
 
-{{- if .GenerateMethod "object.method.Set" }}
+{{- if .GenerateSymbol "object.method.Set" }}
 // Set sets the value of the specified field. The name must be a JSON
 // field name, not the Go name
 func (v *{{ $objectName }}) Set(key string, value interface{}) error {
@@ -131,7 +143,7 @@ func (v *{{ $objectName }}) Set(key string, value interface{}) error {
 }
 {{ end }}
 
-{{- if .GenerateMethod "object.method.Has" }}
+{{- if .GenerateSymbol "object.method.Has" }}
 // Has returns true if the field specified by the argument has been populated.
 // The field name must be the JSON field name, not the Go-structure's field name.
 func (v *{{ $objectName }}) Has(name string) bool {
@@ -152,7 +164,7 @@ func (v *{{ $objectName }}) Has(name string) bool {
 }
 {{- /* end "object.method.Has" */ -}}{{ end }}
 
-{{- if $.GenerateMethod "object.method.Keys" }}
+{{- if $.GenerateSymbol "object.method.Keys" }}
 // Keys returns a slice of string comprising of JSON field names whose values
 // are present in the object. 
 func (v *{{ $objectName }}) Keys() []string {
@@ -176,7 +188,7 @@ func (v *{{ $objectName }}) Keys() []string {
 
 {{- range $i, $field := .Fields }}
 {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
-{{- if $.GenerateMethod ($field.GetName | printf "object.method.Has%s") }}
+{{- if $.GenerateSymbol ($field.GetName | printf "object.method.Has%s") }}
 // Has{{ $field.GetName }} returns true if the field `{{ $field.GetJSON }}` has been populated
 func (v *{{ $objectName }}) Has{{ $field.GetName }}() bool {
   v.mu.RLock()
@@ -187,7 +199,7 @@ func (v *{{ $objectName }}) Has{{ $field.GetName }}() bool {
 {{- /* end range */ -}}{{ end }}
 
 {{- range $i, $field := .Fields }}
-{{ if $.GenerateMethod ($field.GetName | printf "object.method.%s") }}
+{{ if $.GenerateSymbol ($field.GetName | printf "object.method.%s") }}
 {{- $type := $field.GetType }}
 {{- $rawType := $type.GetRawType }}
 {{- $ptrType := $type.GetPointerType }}
@@ -206,7 +218,7 @@ func (v *{{ $objectName }}) {{ $field.GetName }}() {{ $type.GetApparentType }} {
 {{- /* end "object.method.%s" */ -}}{{ end }}
 {{- /* end range */ -}}{{ end }}
 
-{{- if .GenerateMethod "object.method.Remove" }}
+{{- if .GenerateSymbol "object.method.Remove" }}
 // Remove removes the value associated with a key
 func (v *{{ $objectName }}) Remove(key string) error {
   v.mu.Lock()
@@ -226,7 +238,7 @@ func (v *{{ $objectName }}) Remove(key string) error {
 }
 {{- end }}
 
-{{ if .GenerateMethod "object.method.Clone" -}}
+{{ if .GenerateSymbol "object.method.Clone" -}}
 func (v *{{ $objectName }}) Clone(dst interface{}) error {
   v.mu.RLock()
   defer v.mu.RUnlock()
@@ -244,7 +256,7 @@ func (v *{{ $objectName }}) Clone(dst interface{}) error {
 }
 {{ end }}
 
-{{ if .GenerateMethod "object.method.MarshalJSON" -}}
+{{ if .GenerateSymbol "object.method.MarshalJSON" -}}
 // MarshalJSON serializes {{ $objectName }} into JSON.
 // All pre-declared fields are included as long as a value is
 // assigned to them, as well as all extra fields. All of these
@@ -278,7 +290,7 @@ func (v *{{ $objectName }}) MarshalJSON() ([]byte, error) {
 }
 {{ end -}}
 
-{{ if .GenerateMethod "object.method.decodeExtraField" }}
+{{ if .GenerateSymbol "object.method.decodeExtraField" }}
 func (v *{{ $objectName }}) decodeExtraField(name string, dec *json.Decoder, dst interface{}) error {
   if err := dec.Decode(dst); err != nil {
     return fmt.Errorf(`failed to decode value for %q: %w`, name, err)
@@ -287,7 +299,7 @@ func (v *{{ $objectName }}) decodeExtraField(name string, dec *json.Decoder, dst
 }
 {{- end }}
 
-{{ if .GenerateMethod "object.method.UnmarshalJSON" -}}
+{{ if .GenerateSymbol "object.method.UnmarshalJSON" -}}
 // UnmarshalJSON deserializes a piece of JSON data into {{ $objectName }}.
 //
 // Pre-defined fields must be deserializable via "encoding/json" to their

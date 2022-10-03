@@ -1,6 +1,6 @@
 {{ define "object/builder" }}
 {{- $builderName := .BuilderName}}
-{{ if .GenerateMethod "builder.struct" }}
+{{ if .GenerateSymbol "builder.struct" }}
 type {{ $builderName }} struct {
   mu sync.Mutex
   err error
@@ -30,14 +30,14 @@ func (b *{{ $builderName }}) initialize() {
 {{- range $i, $field := .Fields }}
 {{- $type := $field.GetType }}
 {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
-{{- if (not ($field.GetName | printf "builder.method.%s" | $.GenerateMethod)) }}{{ continue }}{{ end }}
+{{- if (not ($field.GetName | printf "builder.method.%s" | $.GenerateSymbol)) }}{{ continue }}{{ end }}
 func (b *{{ $builderName }}) {{ $field.GetName }}(in {{ if $type.SliceStyleInitializerArgument }}...{{ $type.GetElement }}{{ else }}{{ $type.GetApparentType }}{{ end }}) *{{ $builderName }} {
 {{- $setFieldMethod := $.MethodName "builder.method.SetField" }}
   return b.{{ $setFieldMethod }}({{ $field.GetKeyName $ }}, in)
 }
 {{- end }}
 
-{{- if $.GenerateMethod "builder.method.SetField" }}
+{{- if $.GenerateSymbol "builder.method.SetField" }}
 {{- $setFieldMethod := $.MethodName "builder.method.SetField" }}
 // {{ $setFieldMethod }} sets the value of any field. The name should be the JSON field name.
 // Type check will only be performed for pre-defined types
@@ -57,7 +57,7 @@ func (b *{{ $builderName }}) {{ $setFieldMethod }}(name string, value interface{
 }
 {{- end }}
 
-{{- if $.GenerateMethod "builder.method.Build" }}
+{{- if $.GenerateSymbol "builder.method.Build" }}
 func (b *{{ $builderName }}) Build() ({{ .BuilderResultType }}, error) {
   b.mu.Lock()
   defer b.mu.Unlock()
@@ -80,7 +80,7 @@ func (b *{{ $builderName }}) Build() ({{ .BuilderResultType }}, error) {
 }
 {{- /* end builder.method.Build */ -}}{{ end }}
 
-{{- if $.GenerateMethod "builder.method.MustBuild" }}
+{{- if $.GenerateSymbol "builder.method.MustBuild" }}
 func (b *{{ $builderName }}) MustBuild() {{ .BuilderResultType }} {
   object, err := b.Build()
   if err != nil {

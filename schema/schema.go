@@ -88,14 +88,14 @@ func (b Base) BoolVar(name string) bool {
 	return false
 }
 
-// GenerateMethod should return true if the given method is allowed to be
+// GenerateSymbol should return true if the given method is allowed to be
 // generated. The argument consists of a prefix (e.g. "object." or "builder.")
 // followed by the actual method name.
 //
 // By default all methods are allowed. Users may configure this on a per-object
-// basis by providing their own `GenerateMethod` method.
-func (b Base) GenerateMethod(s string) bool {
-	m, ok := b.Variables["DefaultGenerateMethod"]
+// basis by providing their own `GenerateSymbol` method.
+func (b Base) GenerateSymbol(s string) bool {
+	m, ok := b.Variables["DefaultGenerateSymbol"]
 	if !ok {
 		return true
 	}
@@ -577,6 +577,10 @@ func Int(name string) *FieldSpec {
 
 func Bool(name string) *FieldSpec {
 	return Field(name, true)
+}
+
+func ByteSlice(name string) *FieldSpec {
+	return Field(name, []byte(nil))
 }
 
 func (f *FieldSpec) GetName() string {
