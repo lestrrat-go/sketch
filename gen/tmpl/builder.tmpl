@@ -1,5 +1,5 @@
 {{ define "object/builder" }}
-{{- $builderName := .BuilderName}}
+{{- $builderName := .BuilderName }}
 {{ if .GenerateSymbol "builder.struct" }}
 type {{ $builderName }} struct {
   mu sync.Mutex
@@ -13,12 +13,15 @@ type {{ $builderName }} struct {
   {{- runTemplate "ext/builder/header" $ }}
 {{- end }}
 
+{{- if .GenerateSymbol "builder.method.New" }}
 // New{{ $builderName }} creates a new {{ $builderName }} instance.
 // {{ $builderName }} is safe to be used uninitialized as well.
 func New{{ $builderName }}() *{{ $builderName }} {
   return &{{ $builderName }}{}
 }
+{{- end }}
 
+{{- if .GenerateSymbol "builder.method.initialize" }}
 func (b *{{ $builderName }}) initialize() {
   b.err = nil
   b.object = &{{ .Name }}{}
@@ -26,6 +29,7 @@ func (b *{{ $builderName }}) initialize() {
     {{- runTemplate "ext/builder/initialize" $ }}
   {{- end }}
 }
+{{- end }}
 
 {{- range $i, $field := .Fields }}
 {{- $type := $field.GetType }}

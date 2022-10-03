@@ -206,6 +206,10 @@ func (b Base) KeyNamePrefix() string {
 	return b.StringVar(`DefaultKeyNamePrefix`)
 }
 
+func (b Base) QualifyKeyName(s string) string {
+	return b.KeyNamePrefix() + s
+}
+
 // TypeSpec is used to store information about a type, and contains
 // various pieces of hints to generate objects/builders.
 //
@@ -515,6 +519,11 @@ func (ts *TypeSpec) PointerType(s string) *TypeSpec {
 	return ts
 }
 
+func (ts *TypeSpec) RawType(s string) *TypeSpec {
+	ts.rawType = s
+	return ts
+}
+
 func (ts *TypeSpec) Element(s string) *TypeSpec {
 	ts.element = s
 	return ts
@@ -567,20 +576,28 @@ func (f *FieldSpec) GetRequired() bool {
 	return f.required
 }
 
+// String creates a new field with the given name and a string type
 func String(name string) *FieldSpec {
 	return Field(name, ``)
 }
 
+// Int creates a new field with the given name and a int type
 func Int(name string) *FieldSpec {
 	return Field(name, int(0))
 }
 
+// Bool creates a new field with the given name and a bool type
 func Bool(name string) *FieldSpec {
 	return Field(name, true)
 }
 
+var byteSliceType = Type([]byte(nil)).
+	RawType(`[]byte`).
+	PointerType(`[]byte`)
+
+// ByteSlice creates a new field with the given name and a []byte type
 func ByteSlice(name string) *FieldSpec {
-	return Field(name, []byte(nil))
+	return Field(name, byteSliceType)
 }
 
 func (f *FieldSpec) GetName() string {
@@ -657,14 +674,6 @@ func (f *FieldSpec) GetIsExtension() bool {
 	return f.extension
 }
 
-func (f *FieldSpec) GetKeyName(object interface{ KeyNamePrefix() string }) string {
-	var b strings.Builder
-
-	// If the object wants per-object prefix, do it. Otherwise leave it empty
-	if prefix := object.KeyNamePrefix(); prefix != "" {
-		b.WriteString(prefix)
-	}
-	b.WriteString(f.GetName())
-	b.WriteString(`Key`)
-	return b.String()
+func (f *FieldSpec) GetKeyName(object interface{ QualifyKeyName(string) string }) string {
+	return object.QualifyKeyName(f.GetName())
 }
