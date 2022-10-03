@@ -62,6 +62,7 @@ func (tmpl *Template) makeFuncs(tt **template.Template) template.FuncMap {
 		"hasTemplate": tmpl.hasTemplate(tt),
 		"runTemplate": tmpl.runTemplate(tt),
 		"fieldByName": tmpl.fieldByName(tt),
+		"increment":   tmpl.increment(tt),
 	}
 }
 
@@ -109,5 +110,11 @@ func (tmpl *Template) fieldByName(**template.Template) func(schema.Interface, st
 			}
 		}
 		return nil
+	}
+}
+
+func (tmpl *Template) increment(**template.Template) func(int) int {
+	return func(v int) int {
+		return v + 1
 	}
 }
