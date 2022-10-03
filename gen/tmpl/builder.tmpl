@@ -41,7 +41,7 @@ func (b *{{ $builderName }}) {{ $field.GetName }}(in {{ if $type.SliceStyleIniti
 {{- $setFieldMethod := $.MethodName "builder.method.SetField" }}
 // {{ $setFieldMethod }} sets the value of any field. The name should be the JSON field name.
 // Type check will only be performed for pre-defined types
-func (b *{{ $builderName }}) {{ $setFieldMethod }}(name string, value interface{}) *Builder {
+func (b *{{ $builderName }}) {{ $setFieldMethod }}(name string, value interface{}) *{{ $builderName }} {
   b.mu.Lock()
   defer b.mu.Unlock()
 

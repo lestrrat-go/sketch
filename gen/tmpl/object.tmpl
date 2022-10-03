@@ -94,6 +94,7 @@ func (v *{{ $objectName }}) Set(key string, value interface{}) error {
 {{- $type := $field.GetType }}
 {{- $rawType := $type.GetRawType }}
 {{- $ptrType := $type.GetPointerType }}
+{{- $apparentType := $type.GetApparentType }}
   {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
   case {{ $field.GetKeyName $ }}:
   {{- $acceptValueMethod := $type.GetAcceptValueMethodName }}
@@ -108,12 +109,12 @@ func (v *{{ $objectName }}) Set(key string, value interface{}) error {
     v.{{ $field.GetUnexportedName }} = &object
     {{- end }}
   {{- else }}
-    converted, ok := value.({{ $rawType }})
+    converted, ok := value.({{ $apparentType }})
     if !ok {
-      return fmt.Errorf(`expected value of type {{ $rawType }} for field {{ $field.GetJSON }}, got %T`, value)
+      return fmt.Errorf(`expected value of type {{ $apparentType }} for field {{ $field.GetJSON }}, got %T`, value)
     }
 
-    {{- if (eq $rawType $ptrType) }}
+    {{- if (eq $apparentType $ptrType) }}
     v.{{ $field.GetUnexportedName }} = converted
     {{- else }}
     v.{{ $field.GetUnexportedName }} = &converted
