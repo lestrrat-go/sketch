@@ -200,8 +200,8 @@ default context variable for each template block
 
 ```
 {{ define "ext/object/header" }}
-{{ .Name }}{{# will print schema object name }}
-{{ $.Name }}{{# same as above }}
+{{ .Name }}{{- /* will print schema object name */ -}}
+{{ $.Name }}{{- /* same as above */ -}}
 {{ end }}
 ```
 
