@@ -63,7 +63,7 @@ func (v *{{ $objectName }}) getNoLock(key string, dst interface{}, raw bool) err
     {{- $getValueMethod := $type.GetGetValueMethodName }}
     {{- if $getValueMethod }}
       if raw {
-        return blackmagic.AssignIfCompatible(dst, {{ if (ne $rawType $ptrType) }}*val{{ else }}val{{ end }})
+        return blackmagic.AssignIfCompatible(dst, val)
       }
       return blackmagic.AssignIfCompatible(dst, val.{{ $getValueMethod }}())
     {{- else }}
