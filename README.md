@@ -162,14 +162,15 @@ You can use the internal names (show below) to specify that certain exclude part
 | `(Object).Get`| `object.method.Get`  | Method to retrieve the value of an arbitrary field by its JSON field name |
 | `(Object).Has` | `object.method.Has` | Method to query the presence of a value of an arbitrary field by its JSON field name |
 | `(Object).HasXXXXX` | `object.method.HasXXXXX` | Method to query the presence of a value of field `XXXXX` |
-| `(Object).XXXXX` | `object.method.XXXXX` | Method to retrieve the value of field `XXXXX` |
+| `(Object).XXXXX` | `object.method.XXXXX` | Method to retrieve the value of field `XXXXX`. Unlike `Get`, these methods are appropriately typed |
 | `(Object).Remove` | `object.method.Remove` | Method to remove the value of an arbitrary field by its JSON field name |
 | `(Object).Keys` | `object.method.Keys` | Method to retrieve the JSON key names that are present in the object |
 | `(Object).MarshalJSON` | `object.method.MarshalJSON` | Method to serialize the object into JSON |
 | `(Object).UnmarshalJSON` | `object.method.UnmarshalJSON` | Method to deserialize the object from JSON |
 | `(Object).Clone` | `object.method.Clone` | Method to clone an object |
 | Builder Object | `builder.struct` | The builder struct definition. Will have the name of your object plus "Builder" |
-| `(Builder).XXXXX` | `builder.method.XXXX` | Method to initialize the value of field `XXXXX` via the Builder |
+| `(Builder).XXXXX` | `builder.method.XXXX` | Method to initialize the value of field `XXXXX` via the Builder. Unlike `(Object).Set`, these methods are appropriately typed |
+| `(Builder).SetField | Method to set an arbitrary field in the object, presumably not on the pre-defined list of attributes |
 | `(Builder).Build` | `builder.method.Build` | Method to build and return the object from the Builder |
 | `(Builder).MustBuild` | `builder.method.MustBuild` | Method to build and return the object from the Builder |
 
