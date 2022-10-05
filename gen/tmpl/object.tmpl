@@ -428,7 +428,7 @@ LOOP:
   {{- if (not $field.GetRequired) }}{{ continue }}{{ end }}
   {{- $type := $field.GetType }}
   if v.{{ $field.GetUnexportedName }} == nil {
-    return fmt.Errorf(`required field {{ $field.GetJSON }} is missing`)
+    return fmt.Errorf(`required field {{ $field.GetJSON }} is missing for object {{ $objectName }}`)
   }
 {{- end }}
 
