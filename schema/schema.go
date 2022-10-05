@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/lestrrat-go/byteslice"
 	"github.com/lestrrat-go/xstrings"
 )
 
@@ -35,6 +36,7 @@ type Interface interface {
 	Fields() []*FieldSpec
 	Comment() string
 	KeyNamePrefix() string
+	GetKeyName(string) string
 }
 
 // Base is the struct that defines all of your schemas. You must include
@@ -88,6 +90,10 @@ func (b Base) BoolVar(name string) bool {
 	return false
 }
 
+func (b Base) GetKeyName(fieldName string) string {
+	return b.KeyNamePrefix() + fieldName + `Key`
+}
+
 // GenerateSymbol should return true if the given method is allowed to be
 // generated. The argument consists of a prefix (e.g. "object." or "builder.")
 // followed by the actual method name.
@@ -106,8 +112,10 @@ func (b Base) GenerateSymbol(s string) bool {
 	return true
 }
 
-func (b Base) MethodName(s string) string {
-	v, ok := b.Variables["DefaultMethodNames"]
+// SymbolName takes an internal name like "object.method.Foo" and returns
+// the actual symbol name
+func (b Base) SymbolName(s string) string {
+	v, ok := b.Variables["DefaultSymbolRenames"]
 	if ok {
 		m, ok := v.(map[string]string)
 		if ok {
@@ -206,10 +214,6 @@ func (b Base) KeyNamePrefix() string {
 	return b.StringVar(`DefaultKeyNamePrefix`)
 }
 
-func (b Base) QualifyKeyName(s string) string {
-	return b.KeyNamePrefix() + s
-}
-
 // TypeSpec is used to store information about a type, and contains
 // various pieces of hints to generate objects/builders.
 //
@@ -238,6 +242,7 @@ type TypeSpec struct {
 	initArgStyle          InitializerArgumentStyle
 	supportsLen           bool
 	zeroVal               string
+	isInterface           bool
 }
 
 func typeName(rv reflect.Type) string {
@@ -268,6 +273,16 @@ func Type(v interface{}) *TypeSpec {
 	rv := reflect.TypeOf(v)
 
 	typ := typeName(rv)
+
+	var isInterface bool
+	switch rv.Kind() {
+	case reflect.String:
+		if v.(string) != "" {
+			panic(fmt.Sprintf(`schema.Type received a non-empty string value %q. possible misuse of schema.TypeName?`, v))
+		}
+	case reflect.Interface:
+		isInterface = true
+	}
 
 	var ptrType string
 	var rawType string
@@ -328,6 +343,7 @@ func Type(v interface{}) *TypeSpec {
 		initArgStyle:          initArgStyle,
 		supportsLen:           supportsLen,
 		zeroVal:               fmt.Sprintf("%#v", reflect.Zero(rv)),
+		isInterface:           isInterface,
 	}
 }
 
@@ -394,6 +410,15 @@ func (ts *TypeSpec) InitializerArgumentStyle(ias InitializerArgumentStyle) *Type
 func (ts *TypeSpec) ZeroVal(s string) *TypeSpec {
 	ts.zeroVal = s
 	return ts
+}
+
+func (ts *TypeSpec) IsInterface(b bool) *TypeSpec {
+	ts.isInterface = b
+	return ts
+}
+
+func (ts *TypeSpec) GetIsInterface() bool {
+	return ts.isInterface
 }
 
 // GetValue specifies that this type implements the `GetValue` method.
@@ -543,6 +568,8 @@ type FieldSpec struct {
 	json           string
 	comment        string
 	extension      bool
+	extra          map[string]interface{}
+	constant       *string
 }
 
 var typInfoType = reflect.TypeOf((*TypeSpec)(nil))
@@ -553,7 +580,10 @@ func Field(name string, typ interface{}) *FieldSpec {
 		panic(fmt.Sprintf("schema fields must be provided an exported name: (%q is invalid)", name))
 	}
 
-	f := &FieldSpec{name: name}
+	f := &FieldSpec{
+		name:  name,
+		extra: make(map[string]interface{}),
+	}
 	if typ == nil {
 		panic("schema.Field must receive a non-nil second parameter")
 	}
@@ -565,6 +595,15 @@ func Field(name string, typ interface{}) *FieldSpec {
 		f.typ = Type(typ)
 	}
 	return f
+}
+
+func (f *FieldSpec) Extra(name string, value interface{}) *FieldSpec {
+	f.extra[name] = value
+	return f
+}
+
+func (f *FieldSpec) GetExtra(name string) interface{} {
+	return f.extra[name]
 }
 
 func (f *FieldSpec) Required(b bool) *FieldSpec {
@@ -591,13 +630,26 @@ func Bool(name string) *FieldSpec {
 	return Field(name, true)
 }
 
-var byteSliceType = Type([]byte(nil)).
-	RawType(`[]byte`).
-	PointerType(`[]byte`)
+// ByteSliceType represents a `[]byte` type. Since `sketch` mostly works with JSON,
+// it needs to handle `[]byte` fields being encoded/decoded with base64 encoding
+// transparently. Therefore unless the default behavior for `encoding/json`
+// already work for you, you may need tweaking. The `ByteSliceType` uses
+// `byteslice.Type` internally, which allows the user to specify the
+// base64 encoding.
+var ByteSliceType = Type(byteslice.Type{}).
+	ApparentType(`[]byte`).
+	AcceptValue(true).
+	GetValueMethodName(`Bytes`).
+	ZeroVal(`[]byte(nil)`)
+
+var NativeByteSliceType = Type([]byte(nil)).
+	ApparentType(`[]byte`).
+	PointerType(`[]byte`).
+	RawType(`[]byte`)
 
 // ByteSlice creates a new field with the given name and a []byte type
 func ByteSlice(name string) *FieldSpec {
-	return Field(name, byteSliceType)
+	return Field(name, ByteSliceType)
 }
 
 func (f *FieldSpec) GetName() string {
@@ -674,6 +726,23 @@ func (f *FieldSpec) GetIsExtension() bool {
 	return f.extension
 }
 
-func (f *FieldSpec) GetKeyName(object interface{ QualifyKeyName(string) string }) string {
-	return object.QualifyKeyName(f.GetName())
+func (f *FieldSpec) GetKeyName(object Interface) string {
+	return object.GetKeyName(f.GetName())
+}
+
+// ConstantValue sets the string value that should be used
+// when fetching this field. When ConstantValue is specified,
+// calling `Set` on this field would be a no-op (no error
+// is returned)
+func (f *FieldSpec) ConstantValue(s string) *FieldSpec {
+	f.constant = &s
+	return f
+}
+
+func (f *FieldSpec) GetIsConstant() bool {
+	return f.constant != nil
+}
+
+func (f *FieldSpec) GetConstantValue() string {
+	return *(f.constant)
 }

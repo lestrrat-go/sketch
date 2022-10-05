@@ -106,8 +106,12 @@ func (app *App) Run(args []string) error {
 				Usage: "Regular expression to match against schema names. If they match the schema will not be processed.",
 			},
 			&cli.StringSliceFlag{
-				Name:  "exclude",
-				Usage: "Regular expression to match against method names. If they match the method will not be generated. If schemas define their own GenerateSymbol, these patterns will be ignored",
+				Name:  "exclude-symbol",
+				Usage: "Regular expression to match against symbol names. If they match the method will not be generated. If schemas define their own GenerateSymbol, these patterns will be ignored",
+			},
+			&cli.StringSliceFlag{
+				Name:  "rename-symbol",
+				Usage: "Pair in the form of internalName=symbolName to map an internal name to a symbol name",
 			},
 		},
 	}
@@ -164,7 +168,14 @@ func (app *App) RunMain(c *cli.Context) error {
 	}
 	variables["Verbose"] = app.verbose
 
-	if patterns := c.StringSlice(`exclude`); len(patterns) > 0 {
+	renames := make(map[string]string)
+	for _, pair := range c.StringSlice(`rename-symbol`) {
+		kv := strings.Split(pair, "=")
+		renames[kv[0]] = kv[1]
+	}
+	variables["Renames"] = renames
+
+	if patterns := c.StringSlice(`exclude-symbol`); len(patterns) > 0 {
 		variables["Excludes"] = patterns
 	}
 

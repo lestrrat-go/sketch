@@ -71,6 +71,9 @@ func (v *{{ $objectName }}) getNoLock(key string, dst interface{}, raw bool) err
 {{- $apparentType := $type.GetApparentType }}
   {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
   case {{ $field.GetKeyName $ }}:
+    {{- if $field.GetIsConstant }}
+      return blackmagic.AssignIfCompatible(dst, v.{{ $field.GetName }}())
+    {{- else }}
     if val := v.{{ $field.GetUnexportedName }}; val != nil {
     {{- $getValueMethod := $type.GetGetValueMethodName }}
     {{- if $getValueMethod }}
@@ -82,6 +85,7 @@ func (v *{{ $objectName }}) getNoLock(key string, dst interface{}, raw bool) err
       return blackmagic.AssignIfCompatible(dst, {{ if (ne $apparentType $ptrType) }}*val{{ else }}val{{ end }})
     {{- end }}
     }
+    {{- end }}
 {{- end }}
   default:
     if v.extra != nil {
@@ -109,12 +113,23 @@ func (v *{{ $objectName }}) Set(key string, value interface{}) error {
 {{- $apparentType := $type.GetApparentType }}
   {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
   case {{ $field.GetKeyName $ }}:
+  {{- if $field.GetIsConstant }}
+    // constant value is no-op on Set
+    return nil
+  {{- else }}
   {{- $acceptValueMethod := $type.GetAcceptValueMethodName }}
   {{- if $acceptValueMethod }}
+    {{- if $type.GetIsInterface }}
+    object, err := {{ $acceptValueMethod }}(value)
+    if err != nil {
+      return fmt.Errorf(`failed to accept value: %w`, err)
+    }
+    {{- else }}
     var object {{ $rawType }}
     if err := object.{{ $acceptValueMethod }}(value); err != nil {
       return fmt.Errorf(`failed to accept value: %w`, err)
     }
+    {{- end }}
     {{- if (eq $rawType $ptrType) }}
     v.{{ $field.GetUnexportedName }} = object
     {{- else }}
@@ -131,6 +146,7 @@ func (v *{{ $objectName }}) Set(key string, value interface{}) error {
     {{- else }}
     v.{{ $field.GetUnexportedName }} = &converted
     {{- end }}
+  {{- end }}
   {{- end }}
 {{- end }}
   default:
@@ -151,7 +167,11 @@ func (v *{{ $objectName }}) Has(name string) bool {
 {{- range $i, $field := .Fields }}
 {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
   case {{ $field.GetKeyName $ }}:
+  {{- if $field.GetIsConstant }}
+    return true
+  {{- else }}
     return v.{{ $field.GetUnexportedName }} != nil
+  {{- end }}
 {{- end }}
   default:
     if v.extra != nil {
@@ -164,16 +184,22 @@ func (v *{{ $objectName }}) Has(name string) bool {
 }
 {{- /* end "object.method.Has" */ -}}{{ end }}
 
-{{- if $.GenerateSymbol "object.method.Keys" }}
-// Keys returns a slice of string comprising of JSON field names whose values
+{{- $symbolName := "object.method.Keys" }}
+{{- if $.GenerateSymbol $symbolName }}
+{{- $methodName := $.SymbolName $symbolName }}
+// {{ $methodName }} returns a slice of string comprising of JSON field names whose values
 // are present in the object. 
-func (v *{{ $objectName }}) Keys() []string {
+func (v *{{ $objectName }}) {{ $methodName }}() []string {
   keys := make([]string, 0, {{ (len .Fields) }})
 {{- range $i, $field := .Fields }}
 {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
+{{- if $field.GetIsConstant }}
+  keys = append(keys, {{ $field.GetKeyName $ }})
+{{- else }}
   if v.{{ $field.GetUnexportedName }} != nil {
     keys = append(keys, {{ $field.GetKeyName $ }})
   }
+{{- end }}
 {{- /* end range */ -}}{{- end }}
 
   if len(v.extra) > 0 {
@@ -191,9 +217,13 @@ func (v *{{ $objectName }}) Keys() []string {
 {{- if $.GenerateSymbol ($field.GetName | printf "object.method.Has%s") }}
 // Has{{ $field.GetName }} returns true if the field `{{ $field.GetJSON }}` has been populated
 func (v *{{ $objectName }}) Has{{ $field.GetName }}() bool {
+{{- if $field.GetIsConstant }}
+  return true
+{{- else }}
   v.mu.RLock()
   defer v.mu.RUnlock()
   return v.{{ $field.GetUnexportedName }} != nil
+{{- end }}
 }
 {{- /* end object.method.Has% */ -}}{{ end }}
 {{- /* end range */ -}}{{ end }}
@@ -207,6 +237,9 @@ func (v *{{ $objectName }}) Has{{ $field.GetName }}() bool {
 {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
 {{ comment $field.GetComment $field }}
 func (v *{{ $objectName }}) {{ $field.GetName }}() {{ $type.GetApparentType }} {
+{{- if $field.GetIsConstant }}
+  return {{ $field.GetConstantValue }}
+{{- else }}
   v.mu.RLock()
   defer v.mu.RUnlock()
   if val := v.{{ $field.GetUnexportedName }}; val != nil {
@@ -214,6 +247,7 @@ func (v *{{ $objectName }}) {{ $field.GetName }}() {{ $type.GetApparentType }} {
     return {{ if $getValueMethod }}val.{{ $getValueMethod }}(){{ else if (ne $apparentType $ptrType) }}*val{{ else }}val{{ end }}
   }
   return {{ $type.GetZeroVal }}
+{{- end }}
 }
 {{- /* end "object.method.%s" */ -}}{{ end }}
 {{- /* end range */ -}}{{ end }}
@@ -228,7 +262,11 @@ func (v *{{ $objectName }}) Remove(key string) error {
 {{- range $i, $field := .Fields }}
   {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
   case {{ $field.GetKeyName $ }}:
+    {{- if $field.GetIsConstant }}
+    // no-op
+    {{- else }}
     v.{{ $field.GetUnexportedName }} = nil
+    {{- end }}
 {{- end }}
   default:
     delete(v.extra, key)
@@ -249,6 +287,7 @@ func (v *{{ $objectName }}) Clone(dst interface{}) error {
   }
   return blackmagic.AssignIfCompatible(dst,  &{{ $objectName }}{
 {{- range $i, $field := .Fields }}
+  {{- if $field.GetIsConstant }}{{ continue }}{{ end }}
     {{ $field.GetUnexportedName }}: v.{{ $field.GetUnexportedName }},
 {{- end }}
     extra: extra,
@@ -313,6 +352,7 @@ func (v *{{ $objectName }}) UnmarshalJSON(data []byte) error {
 
 {{- range $i, $field := .Fields }}
 {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
+{{- if $field.GetIsConstant }}{{ continue }}{{ end }}
   v.{{ $field.GetUnexportedName }} = nil
 {{- end }}
 
@@ -342,14 +382,31 @@ LOOP:
 {{- $rawType := $type.GetRawType }}
 {{- $ptrType := $type.GetPointerType }}
       case {{ $field.GetKeyName $ }}:
+  {{- if $type.GetIsInterface }}{{- /* we can't just decode an interface, so we need something that it can accept */ -}}
+        var acceptValue interface{}
+        if err := dec.Decode(&acceptValue); err != nil {
+          return fmt.Errorf(`failed to decode value for %q: %w`, {{ $field.GetKeyName $ }}, err)
+        }
+	val, err := {{ $type.GetAcceptValueMethodName }}(acceptValue)
+	if err != nil {
+	  return fmt.Errorf(`failed to accept value for %q: %w`, {{ $field.GetKeyName $ }}, err)
+	}
+  {{- else }}
         var val {{ $rawType }}
         if err := dec.Decode(&val); err != nil {
           return fmt.Errorf(`failed to decode value for %q: %w`, {{ $field.GetKeyName $ }}, err)
         }
-  {{- if (eq $rawType $ptrType) }}
-        v.{{ $field.GetUnexportedName }} = val
+  {{- end }}
+  {{- if $field.GetIsConstant }}
+	if val != {{ $field.GetConstantValue }} {
+	  return fmt.Errorf(`field %q must be {{ $field.GetConstantValue }} (got %#v)`, tok, val)
+	}
   {{- else }}
+    {{- if (eq $rawType $ptrType) }}
+        v.{{ $field.GetUnexportedName }} = val
+    {{- else }}
         v.{{ $field.GetUnexportedName }} = &val
+    {{- end }}
   {{- end }}
 {{- end }}
       default:
@@ -364,6 +421,16 @@ LOOP:
       }
     }
   }
+
+{{- range $i, $field := .Fields }}
+  {{- if $field.GetIsExtension }}{{ continue }}{{ end }}
+  {{- if $field.GetIsConstant }}{{ continue }}{{ end }}
+  {{- if (not $field.GetRequired) }}{{ continue }}{{ end }}
+  {{- $type := $field.GetType }}
+  if v.{{ $field.GetUnexportedName }} == nil {
+    return fmt.Errorf(`required field {{ $field.GetJSON }} is missing`)
+  }
+{{- end }}
 
   if extra != nil {
     v.extra = extra
@@ -401,6 +468,7 @@ package {{ .Package }}
 type {{ $objectName }} struct {
   mu sync.RWMutex
 {{- range $i, $field := .Fields }}
+  {{- if $field.GetIsConstant }}{{ continue }}{{ end }}
   {{ $field.GetUnexportedName }} {{ $field.GetType.GetPointerType }}
 {{- end }}
   extra map[string]interface{}

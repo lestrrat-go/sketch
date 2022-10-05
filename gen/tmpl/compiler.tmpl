@@ -101,6 +101,9 @@ func _main() error {
   {{- if $.WithKeyNamePrefix }}
   {{ $varname }}.Base.Variables["DefaultKeyNamePrefix"] = {{ $varname }}Name
   {{- end }}
+  {{- if $.Renames }}
+  {{ $varname }}.Base.Variables["DefaultSymbolRenames"] = {{ $.Renames | printf "%#v" }}
+  {{- end }}
   srcs[{{ $i }}] = Src{
     Schema: {{ $varname }},
     FilenameBase: {{ $varname }}.FilenameBase(),
