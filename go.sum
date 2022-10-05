@@ -5,16 +5,6 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/lestrrat-go/blackmagic v1.0.2-0.20220926061631-9e875f47412a h1:JImLbxx67PYXvDVwDY9oyvHxNUrbs43JcVXv+DO5X9U=
 github.com/lestrrat-go/blackmagic v1.0.2-0.20220926061631-9e875f47412a/go.mod h1:UrEqBzIR2U6CnzVyUtfM6oZNMt/7O7Vohk2J0OGSAtU=
-github.com/lestrrat-go/byteslice v0.0.0-20221004055347-6e9d7488d390 h1:pSDvn3OpU+6Zxp1Jdo+bCbxTeuEocCTV7oMRmL//ZbQ=
-github.com/lestrrat-go/byteslice v0.0.0-20221004055347-6e9d7488d390/go.mod h1:Kad4+yzV9rRszIkptSm5stvJ+IBRn8GJHQq+CMrnpow=
-github.com/lestrrat-go/byteslice v0.0.0-20221004070255-cd521d3333ae h1:nQpEn6UQs1MZJeUqkBEVCslSGqjIj+PZc9esBgMdQi8=
-github.com/lestrrat-go/byteslice v0.0.0-20221004070255-cd521d3333ae/go.mod h1:Kad4+yzV9rRszIkptSm5stvJ+IBRn8GJHQq+CMrnpow=
-github.com/lestrrat-go/byteslice v0.0.0-20221004072026-d345a5eb1f50 h1:MAxwr1g7udssBlsFdIuqYdqJSAuGu1Ri+0qVe1/FhdQ=
-github.com/lestrrat-go/byteslice v0.0.0-20221004072026-d345a5eb1f50/go.mod h1:Kad4+yzV9rRszIkptSm5stvJ+IBRn8GJHQq+CMrnpow=
-github.com/lestrrat-go/byteslice v0.0.0-20221004095818-d896ced59a71 h1:fL+vgRwmlKd37QITc8OH7woP9Dzv3+J+InIQs07dHkk=
-github.com/lestrrat-go/byteslice v0.0.0-20221004095818-d896ced59a71/go.mod h1:Kad4+yzV9rRszIkptSm5stvJ+IBRn8GJHQq+CMrnpow=
-github.com/lestrrat-go/byteslice v0.0.0-20221004100408-32ee6cbdf221 h1:37PV/EEElc2h3Oo9PIbXrih5VGnuJoJFD0l8T5nRZfo=
-github.com/lestrrat-go/byteslice v0.0.0-20221004100408-32ee6cbdf221/go.mod h1:Kad4+yzV9rRszIkptSm5stvJ+IBRn8GJHQq+CMrnpow=
 github.com/lestrrat-go/byteslice v0.0.0-20221004100519-1da846d06c9e h1:Z1L/59v50pHQSFoeW3PGrc0fBuSlu3NvDcc4ufTTmgw=
 github.com/lestrrat-go/byteslice v0.0.0-20221004100519-1da846d06c9e/go.mod h1:Kad4+yzV9rRszIkptSm5stvJ+IBRn8GJHQq+CMrnpow=
 github.com/lestrrat-go/multifs v0.0.0-20220929095432-73523184bb48 h1:q5lHI2iJFgLO+EEqc+S1HOrkzDspdhmykK+OoYPxD28=

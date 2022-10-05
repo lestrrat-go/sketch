@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/lestrrat-go/blackmagic v1.0.2-0.20220926061631-9e875f47412a
+	github.com/lestrrat-go/byteslice v0.0.0-20221004100519-1da846d06c9e
 	github.com/lestrrat-go/multifs v0.0.0-20220929095432-73523184bb48
 	github.com/lestrrat-go/xstrings v0.0.0-20210804220435-4dd8b234342b
 	github.com/stretchr/testify v1.8.0
@@ -14,7 +15,6 @@ require (
 require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/lestrrat-go/byteslice v0.0.0-20221004100519-1da846d06c9e // indirect
 	github.com/lestrrat-go/option v1.0.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
