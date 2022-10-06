@@ -338,15 +338,17 @@ func (v *{{ $objectName }}) decodeExtraField(name string, dec *json.Decoder, dst
 }
 {{- end }}
 
-{{ if .GenerateSymbol "object.method.UnmarshalJSON" -}}
-// UnmarshalJSON deserializes a piece of JSON data into {{ $objectName }}.
+{{- $symbolName := "object.method.UnmarshalJSON" -}}
+{{ if .GenerateSymbol $symbolName -}}
+{{- $methodName := $.SymbolName $symbolName }}
+// {{ $methodName }} deserializes a piece of JSON data into {{ $objectName }}.
 //
 // Pre-defined fields must be deserializable via "encoding/json" to their
 // respective Go types, otherwise an error is returned.
 //
 // Extra fields are stored in a special "extra" storage, which can only
 // be accessed via `Get()` and `Set()` methods.
-func (v *{{ $objectName }}) UnmarshalJSON(data []byte) error {
+func (v *{{ $objectName }}) {{ $methodName }}(data []byte) error {
   v.mu.Lock()
   defer v.mu.Unlock()
 
