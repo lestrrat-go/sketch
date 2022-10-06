@@ -243,6 +243,7 @@ type TypeSpec struct {
 	supportsLen           bool
 	zeroVal               string
 	isInterface           bool
+	interfaceDecoder      string
 }
 
 func typeName(rv reflect.Type) string {
@@ -344,6 +345,7 @@ func Type(v interface{}) *TypeSpec {
 		supportsLen:           supportsLen,
 		zeroVal:               fmt.Sprintf("%#v", reflect.Zero(rv)),
 		isInterface:           isInterface,
+		interfaceDecoder:      `!!InterfaceDecoder no specified!!`,
 	}
 }
 
@@ -392,13 +394,14 @@ func TypeName(name string) *TypeSpec {
 	}
 
 	return &TypeSpec{
-		name:         name,
-		element:      element,
-		ptrType:      ptrType,
-		rawType:      rawType,
-		initArgStyle: initArgStyle,
-		supportsLen:  supportsLen,
-		zeroVal:      `nil`,
+		name:             name,
+		element:          element,
+		ptrType:          ptrType,
+		rawType:          rawType,
+		initArgStyle:     initArgStyle,
+		supportsLen:      supportsLen,
+		zeroVal:          `nil`,
+		interfaceDecoder: `!!InterfaceDecoder no specified!!`,
 	}
 }
 
@@ -412,6 +415,9 @@ func (ts *TypeSpec) ZeroVal(s string) *TypeSpec {
 	return ts
 }
 
+// IsInterface should be set to true if the type is an interface.
+// When this is true, the decoding logic generated changes.
+// See also `InterfaceDecoder`
 func (ts *TypeSpec) IsInterface(b bool) *TypeSpec {
 	ts.isInterface = b
 	return ts
@@ -419,6 +425,29 @@ func (ts *TypeSpec) IsInterface(b bool) *TypeSpec {
 
 func (ts *TypeSpec) GetIsInterface() bool {
 	return ts.isInterface
+}
+
+// InterfaceDecoder should be set to the name of the function that
+// can take a `[]byte` variable and return a value assignable to
+// the type. For example a type specified as below
+//
+//	schema.Type(`mypkg.Interface`).InterfaceDecoder(`mypkg.Parse`)
+//
+// may produce code resembling
+//
+//	var val mypkg.Interface
+//	var err error
+//	val, err = mypkg.Parse(src) // src is []byte
+//
+// This value is not automatically assigned. Therefore you will
+// laways need to specify this if you are referring to an interface
+func (ts *TypeSpec) InterfaceDecoder(s string) *TypeSpec {
+	ts.interfaceDecoder = s
+	return ts
+}
+
+func (ts *TypeSpec) GetInterfaceDecoder() string {
+	return ts.interfaceDecoder
 }
 
 // GetValue specifies that this type implements the `GetValue` method.

@@ -75,15 +75,15 @@ func (v *{{ $objectName }}) getNoLock(key string, dst interface{}, raw bool) err
       return blackmagic.AssignIfCompatible(dst, v.{{ $field.GetName }}())
     {{- else }}
     if val := v.{{ $field.GetUnexportedName }}; val != nil {
-    {{- $getValueMethod := $type.GetGetValueMethodName }}
-    {{- if $getValueMethod }}
+      {{- $getValueMethod := $type.GetGetValueMethodName }}
+      {{- if $getValueMethod }}
       if raw {
         return blackmagic.AssignIfCompatible(dst, val)
       }
       return blackmagic.AssignIfCompatible(dst, val.{{ $getValueMethod }}())
-    {{- else }}
-      return blackmagic.AssignIfCompatible(dst, {{ if (ne $apparentType $ptrType) }}*val{{ else }}val{{ end }})
-    {{- end }}
+      {{- else }}
+      return blackmagic.AssignIfCompatible(dst, {{ if (or $type.GetIsInterface (eq $apparentType $ptrType)) }}val{{ else }}*val{{ end }})
+      {{- end }}
     }
     {{- end }}
 {{- end }}
@@ -130,7 +130,7 @@ func (v *{{ $objectName }}) Set(key string, value interface{}) error {
       return fmt.Errorf(`failed to accept value: %w`, err)
     }
     {{- end }}
-    {{- if (eq $rawType $ptrType) }}
+    {{- if (or $type.GetIsInterface (eq $rawType $ptrType)) }}
     v.{{ $field.GetUnexportedName }} = object
     {{- else }}
     v.{{ $field.GetUnexportedName }} = &object
@@ -141,7 +141,7 @@ func (v *{{ $objectName }}) Set(key string, value interface{}) error {
       return fmt.Errorf(`expected value of type {{ $apparentType }} for field {{ $field.GetJSON }}, got %T`, value)
     }
 
-    {{- if (eq $apparentType $ptrType) }}
+    {{- if (or $type.GetIsInterface (eq $apparentType $ptrType)) }}
     v.{{ $field.GetUnexportedName }} = converted
     {{- else }}
     v.{{ $field.GetUnexportedName }} = &converted
@@ -228,6 +228,7 @@ func (v *{{ $objectName }}) Has{{ $field.GetName }}() bool {
 {{- /* end object.method.Has% */ -}}{{ end }}
 {{- /* end range */ -}}{{ end }}
 
+{{- /* per-field accessor methods */ -}}
 {{- range $i, $field := .Fields }}
 {{ if $.GenerateSymbol ($field.GetName | printf "object.method.%s") }}
 {{- $type := $field.GetType }}
@@ -244,7 +245,7 @@ func (v *{{ $objectName }}) {{ $field.GetName }}() {{ $type.GetApparentType }} {
   defer v.mu.RUnlock()
   if val := v.{{ $field.GetUnexportedName }}; val != nil {
     {{- $getValueMethod := $type.GetGetValueMethodName }}
-    return {{ if $getValueMethod }}val.{{ $getValueMethod }}(){{ else if (ne $apparentType $ptrType) }}*val{{ else }}val{{ end }}
+    return {{ if $getValueMethod }}val.{{ $getValueMethod }}(){{ else if (or $type.GetIsInterface (eq $apparentType $ptrType)) }}val{{ else }}*val{{ end }}
   }
   return {{ $type.GetZeroVal }}
 {{- end }}
@@ -281,9 +282,12 @@ func (v *{{ $objectName }}) Clone(dst interface{}) error {
   v.mu.RLock()
   defer v.mu.RUnlock()
 
-  extra := make(map[string]interface{})
-  for key, val := range v.extra {
-    extra[key] = val
+  var extra map[string]interface{}
+  if len(v.extra) > 0 {
+    extra = make(map[string]interface{})
+    for key, val := range v.extra {
+      extra[key] = val
+    }
   }
   return blackmagic.AssignIfCompatible(dst,  &{{ $objectName }}{
 {{- range $i, $field := .Fields }}
@@ -385,11 +389,11 @@ LOOP:
 {{- $ptrType := $type.GetPointerType }}
       case {{ $field.GetKeyName $ }}:
   {{- if $type.GetIsInterface }}{{- /* we can't just decode an interface, so we need something that it can accept */ -}}
-        var acceptValue interface{}
-        if err := dec.Decode(&acceptValue); err != nil {
+        var ifaceSrc json.RawMessage
+        if err := dec.Decode(&ifaceSrc); err != nil {
           return fmt.Errorf(`failed to decode value for %q: %w`, {{ $field.GetKeyName $ }}, err)
         }
-	val, err := {{ $type.GetAcceptValueMethodName }}(acceptValue)
+	val, err := {{ $type.GetInterfaceDecoder }}(ifaceSrc)
 	if err != nil {
 	  return fmt.Errorf(`failed to accept value for %q: %w`, {{ $field.GetKeyName $ }}, err)
 	}
@@ -404,7 +408,7 @@ LOOP:
 	  return fmt.Errorf(`field %q must be {{ $field.GetConstantValue }} (got %#v)`, tok, val)
 	}
   {{- else }}
-    {{- if (eq $rawType $ptrType) }}
+    {{- if (or $type.GetIsInterface (eq $rawType $ptrType)) }}
         v.{{ $field.GetUnexportedName }} = val
     {{- else }}
         v.{{ $field.GetUnexportedName }} = &val
@@ -470,8 +474,13 @@ package {{ .Package }}
 type {{ $objectName }} struct {
   mu sync.RWMutex
 {{- range $i, $field := .Fields }}
+  {{- $type := $field.GetType }}
   {{- if $field.GetIsConstant }}{{ continue }}{{ end }}
-  {{ $field.GetUnexportedName }} {{ $field.GetType.GetPointerType }}
+  {{- if $type.GetIsInterface }}
+  {{ $field.GetUnexportedName }} {{ $type.GetRawType }}
+  {{- else }}
+  {{ $field.GetUnexportedName }} {{ $type.GetPointerType }}
+  {{- end }}
 {{- end }}
   extra map[string]interface{}
 }
