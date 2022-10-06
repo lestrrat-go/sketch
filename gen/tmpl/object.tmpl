@@ -389,14 +389,28 @@ LOOP:
 {{- $rawType := $type.GetRawType }}
 {{- $ptrType := $type.GetPointerType }}
       case {{ $field.GetKeyName $ }}:
-  {{- if $type.GetIsInterface }}{{- /* we can't just decode an interface, so we need something that it can accept */ -}}
+  {{- if (and $type.GetIsInterface $type.GetInterfaceDecoder) }}{{- /* we can't just decode an interface, so we need something that it can accept */ -}}
         var ifaceSrc json.RawMessage
         if err := dec.Decode(&ifaceSrc); err != nil {
           return fmt.Errorf(`failed to decode value for %q: %w`, {{ $field.GetKeyName $ }}, err)
         }
 	val, err := {{ $type.GetInterfaceDecoder }}(ifaceSrc)
 	if err != nil {
-	  return fmt.Errorf(`failed to accept value for %q: %w`, {{ $field.GetKeyName $ }}, err)
+	  return fmt.Errorf(`failed to decode interface value for %q: %w`, {{ $field.GetKeyName $ }}, err)
+	}
+  {{- else if $type.GetAcceptValueMethodName }}
+	var acceptValue interface{}
+	if err := dec.Decode(&acceptValue); err != nil {
+	  return fmt.Errorf(`failed to decode vlaue for %q: %w`, {{ $field.GetKeyName $ }}, err)
+	}
+	var val {{ $type.GetRawType }}
+	{{- if $type.GetIsInterface }}
+	val, err = {{ $type.GetAcceptValueMethodName }}(acceptValue)
+	{{- else }}
+	err = val.{{ $type.GetAcceptValueMethodName }}(acceptValue)
+	{{- end }}
+	if err != nil {
+          return fmt.Errorf(`failed to accept value for %q: %w`, {{ $field.GetKeyName $ }}, err)
 	}
   {{- else }}
         var val {{ $rawType }}

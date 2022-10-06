@@ -345,7 +345,6 @@ func Type(v interface{}) *TypeSpec {
 		supportsLen:           supportsLen,
 		zeroVal:               fmt.Sprintf("%#v", reflect.Zero(rv)),
 		isInterface:           isInterface,
-		interfaceDecoder:      `!!InterfaceDecoder no specified!!`,
 	}
 }
 
@@ -394,14 +393,13 @@ func TypeName(name string) *TypeSpec {
 	}
 
 	return &TypeSpec{
-		name:             name,
-		element:          element,
-		ptrType:          ptrType,
-		rawType:          rawType,
-		initArgStyle:     initArgStyle,
-		supportsLen:      supportsLen,
-		zeroVal:          `nil`,
-		interfaceDecoder: `!!InterfaceDecoder no specified!!`,
+		name:         name,
+		element:      element,
+		ptrType:      ptrType,
+		rawType:      rawType,
+		initArgStyle: initArgStyle,
+		supportsLen:  supportsLen,
+		zeroVal:      `nil`,
 	}
 }
 
