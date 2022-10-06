@@ -153,6 +153,7 @@ func (v *{{ $objectName }}) Set(key string, value interface{}) error {
     if v.extra == nil {
       v.extra = make(map[string]interface{})
     }
+
     v.extra[key] = value
   }
   return nil
