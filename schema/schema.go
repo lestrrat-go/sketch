@@ -663,7 +663,7 @@ func Bool(name string) *FieldSpec {
 // already work for you, you may need tweaking. The `ByteSliceType` uses
 // `byteslice.Type` internally, which allows the user to specify the
 // base64 encoding.
-var ByteSliceType = Type(byteslice.Type{}).
+var ByteSliceType = Type(byteslice.Buffer{}).
 	ApparentType(`[]byte`).
 	AcceptValue(true).
 	GetValueMethodName(`Bytes`).

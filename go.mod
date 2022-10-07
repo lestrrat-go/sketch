@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/lestrrat-go/blackmagic v1.0.2-0.20220926061631-9e875f47412a
-	github.com/lestrrat-go/byteslice v0.0.0-20221006133306-54e5792539ff
+	github.com/lestrrat-go/byteslice v0.0.0-20221007013458-55ef0707fc94
 	github.com/lestrrat-go/multifs v0.0.0-20220929095432-73523184bb48
 	github.com/lestrrat-go/xstrings v0.0.0-20210804220435-4dd8b234342b
 	github.com/stretchr/testify v1.8.0

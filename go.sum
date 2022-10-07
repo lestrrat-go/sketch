@@ -5,8 +5,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/lestrrat-go/blackmagic v1.0.2-0.20220926061631-9e875f47412a h1:JImLbxx67PYXvDVwDY9oyvHxNUrbs43JcVXv+DO5X9U=
 github.com/lestrrat-go/blackmagic v1.0.2-0.20220926061631-9e875f47412a/go.mod h1:UrEqBzIR2U6CnzVyUtfM6oZNMt/7O7Vohk2J0OGSAtU=
-github.com/lestrrat-go/byteslice v0.0.0-20221006133306-54e5792539ff h1:+DLytau90vWqFivfESPmtvUcbjdl9JRe1XRm0SZNsWM=
-github.com/lestrrat-go/byteslice v0.0.0-20221006133306-54e5792539ff/go.mod h1:Kad4+yzV9rRszIkptSm5stvJ+IBRn8GJHQq+CMrnpow=
+github.com/lestrrat-go/byteslice v0.0.0-20221007013458-55ef0707fc94 h1:Q/mLyCdr2H9dESK8U3+lbpxhlPyvL9Z7ibVS5rujgjc=
+github.com/lestrrat-go/byteslice v0.0.0-20221007013458-55ef0707fc94/go.mod h1:Kad4+yzV9rRszIkptSm5stvJ+IBRn8GJHQq+CMrnpow=
 github.com/lestrrat-go/multifs v0.0.0-20220929095432-73523184bb48 h1:q5lHI2iJFgLO+EEqc+S1HOrkzDspdhmykK+OoYPxD28=
 github.com/lestrrat-go/multifs v0.0.0-20220929095432-73523184bb48/go.mod h1:eqErXwbclyoN2U5zMkj+Rg0jATv0LFruHZpEE3TPOJU=
 github.com/lestrrat-go/option v1.0.0 h1:WqAWL8kh8VcSoD6xjSH34/1m8yxluXQbDeKNfvFeEO4=
