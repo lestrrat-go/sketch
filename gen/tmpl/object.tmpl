@@ -312,7 +312,7 @@ func (v *{{ $objectName }}) MarshalJSON() ([]byte, error) {
   var buf bytes.Buffer
   enc := json.NewEncoder(&buf)
   buf.WriteByte('{')
-  for i, k := range v.Keys() {
+  for i, k := range v.{{ .SymbolName "object.method.Keys" }}() {
     var val interface{}
     if err := v.getNoLock(k, &val, true); err != nil {
       return nil, fmt.Errorf(`failed to retrieve value for field %q: %w`, k, err)
